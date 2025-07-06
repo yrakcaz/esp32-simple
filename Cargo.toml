@@ -10,7 +10,7 @@ readme = "README.md"
 repository = "https://github.com/yrakcaz/esp-layground.git"
 resolver = "2"
 rust-version = "1.82.0"
-version = "1.0.0"
+version = "1.1.0"
 
 [lib]
 harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
@@ -30,6 +30,7 @@ opt-level = "z"
 [features]
 default = []
 experimental = ["esp-idf-svc/experimental"]
+wifi = []
 
 [dependencies]
 log = "0.4"
@@ -39,6 +40,7 @@ embedded-hal = "=0.2.7"
 esp-idf-hal = "0.44.1"
 esp32-nimble = "0.8.2"
 num_enum = "0.7.3"
+embedded-svc = "0.28.1"
 
 [build-dependencies]
 embuild = "0.32.0"

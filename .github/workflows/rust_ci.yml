@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  APP_NAME: TEST_APP
 
 jobs:
   rust-checks:
@@ -17,12 +18,21 @@ jobs:
       fail-fast: false
       matrix:
         action:
-          - command: build
-            args: --release
-          - command: fmt
+          - name: nofeatures
+            command: fmt
             args: --all -- --check --color always
-          - command: clippy
-            args: --workspace --all-features --bins --lib -- -D warnings
+          - name: nofeatures
+            command: build
+            args: --release
+          - name: nofeatures
+            command: clippy
+            args: --workspace --bins --lib -- -D warnings
+          - name: wifi
+            command: build
+            args: --release --features=wifi
+          - name: wifi
+            command: clippy
+            args: --workspace --bins --lib --features=wifi -- -D warnings
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,9 +43,9 @@ jobs:
           buildtargets: esp32
           ldproxy: true
           version: 1.82.0.3
-      - name: Show Rust version
-        run: rustc --version && cargo --version
-      - name: Enable caching
-        uses: Swatinem/rust-cache@v2
       - name: Run command
         run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
+        env:
+          WIFI_SSID: ${{ matrix.action.name == 'wifi' && 'TEST_SSID' || '' }}
+          WIFI_PASSWORD: ${{ matrix.action.name == 'wifi' && 'TEST_PASSWORD' || '' }}
+          HTTP_URL: ${{ matrix.action.name == 'wifi' && 'https://test.com' || '' }}

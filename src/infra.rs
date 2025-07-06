@@ -12,6 +12,16 @@ pub trait Poller {
     fn poll(&mut self) -> Result<!>;
 }
 
+/// Represents the state of a Switch.
+///
+/// # Variants
+/// * `On` - The Switch is turned on.
+/// * `Off` - The Switch is turned off.
+pub enum State {
+    On,
+    Off,
+}
+
 /// A trait representing a switch that can toggle its state.
 ///
 /// # Errors

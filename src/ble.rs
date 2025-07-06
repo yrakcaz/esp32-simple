@@ -4,46 +4,31 @@ use esp_idf_hal::task::block_on;
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    button,
     clock::Timer,
-    infra::{Poller, Switch},
+    infra::{Poller, State, Switch},
     message::{Notifier, Trigger},
 };
 
+/// The name of the application.
+/// This value is retrieved from the environment variable `APP_NAME`.
+const APP_NAME: &str = env!("APP_NAME");
 const SCAN_FREQ: u64 = 1;
-
-/// Represents the state of the BLE advertiser.
-///
-/// # Variants
-/// * `Active` - The advertiser is active.
-/// * `Inactive` - The advertiser is inactive.
-enum State {
-    Active,
-    Inactive,
-}
 
 /// Represents a BLE advertiser.
 ///
 /// # Type Parameters
 /// * `'a` - Lifetime of the advertiser.
-pub struct Advertiser<'a> {
-    name: &'a str,
+pub struct Advertiser {
     state: State,
 }
 
-impl<'a> Advertiser<'a> {
+impl Advertiser {
     /// Creates a new `Advertiser` instance.
-    ///
-    /// # Arguments
-    /// * `name` - The name of the advertiser.
     ///
     /// # Errors
     /// Returns an error if the advertiser cannot be initialized.
-    pub fn new(name: &'a str) -> Result<Self> {
-        let ret = Self {
-            name,
-            state: State::Inactive,
-        };
+    pub fn new() -> Result<Self> {
+        let ret = Self { state: State::Off };
         ret.apply()?;
 
         Ok(ret)
@@ -59,8 +44,8 @@ impl<'a> Advertiser<'a> {
         let name = match self.state {
             // TODO: This doesn't take into account the fact that multiple devices could be nearby.
             //       That could be handled with some kind of an ID mechanism...
-            State::Active => format!("{}-Active", self.name),
-            State::Inactive => format!("{}-Inactive", self.name),
+            State::On => format!("{APP_NAME}-Active"),
+            State::Off => format!("{APP_NAME}-Inactive"),
         };
 
         advertising
@@ -72,15 +57,15 @@ impl<'a> Advertiser<'a> {
     }
 }
 
-impl Switch for Advertiser<'_> {
+impl Switch for Advertiser {
     /// Toggles the state of the advertiser.
     ///
     /// # Errors
     /// Returns an error if the state cannot be toggled or applied.
     fn toggle(&mut self) -> Result<()> {
         self.state = match self.state {
-            State::Active => State::Inactive,
-            State::Inactive => State::Active,
+            State::On => State::Off,
+            State::Off => State::On,
         };
 
         self.apply()
@@ -92,10 +77,9 @@ impl Switch for Advertiser<'_> {
 /// # Type Parameters
 /// * `'a` - Lifetime of the scanner.
 pub struct Scanner<'a> {
-    name: &'a str,
     notifier: Notifier,
     timer: Timer<'a>,
-    state: Arc<Mutex<button::State>>,
+    state: Arc<Mutex<State>>,
     device: &'a BLEDevice,
     scan: BLEScan,
 }
@@ -106,7 +90,6 @@ impl<'a> Scanner<'a> {
     /// Creates a new `Scanner` instance.
     ///
     /// # Arguments
-    /// * `name` - The name of the scanner.
     /// * `notifier` - A notifier to send scan results.
     /// * `timer` - A timer for scan intervals.
     /// * `state` - Shared state of the scanner.
@@ -114,16 +97,14 @@ impl<'a> Scanner<'a> {
     /// # Errors
     /// Returns an error if the scanner cannot be initialized.
     pub fn new(
-        name: &'a str,
         notifier: Notifier,
         timer: Timer<'a>,
-        state: Arc<Mutex<button::State>>,
+        state: Arc<Mutex<State>>,
     ) -> Result<Self> {
         let device = BLEDevice::take();
         let scan = BLEScan::new();
 
         Ok(Self {
-            name,
             notifier,
             timer,
             state,
@@ -141,9 +122,9 @@ impl<'a> Scanner<'a> {
             .scan
             .start(self.device, Self::WINDOW, |_, data| {
                 data.name().and_then(|name| {
-                    if name == format!("{}-Active", self.name) {
+                    if name == format!("{APP_NAME}-Active") {
                         Some(Trigger::DeviceFoundActive)
-                    } else if name == format!("{}-Inactive", self.name) {
+                    } else if name == format!("{APP_NAME}-Inactive") {
                         Some(Trigger::DeviceFoundInactive)
                     } else {
                         None
@@ -166,7 +147,7 @@ impl Poller for Scanner<'_> {
             loop {
                 self.timer.delay(SCAN_FREQ).await?;
 
-                if let button::State::Off = *self
+                if let State::Off = *self
                     .state
                     .lock()
                     .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?
