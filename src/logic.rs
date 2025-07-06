@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 use log::info;
 use std::{collections::HashSet, fmt};
 
+#[cfg(feature = "wifi")]
+use crate::http::{Client, HTTP_URL};
 use crate::{
     ble::Advertiser,
     clock::Timer,
@@ -74,7 +76,9 @@ impl From<&State> for Rgb {
 /// # Type Parameters
 /// * `'a` - Lifetime of the state machine.
 pub struct StateMachine<'a> {
-    advertiser: Advertiser<'a>,
+    advertiser: Advertiser,
+    #[cfg(feature = "wifi")]
+    http: Client<'a>,
     led: Led<'a>,
     timer: Timer<'a>,
     dispatcher: Dispatcher,
@@ -86,6 +90,7 @@ impl<'a> StateMachine<'a> {
     ///
     /// # Arguments
     /// * `advertiser` - A BLE advertiser.
+    /// * `http` - An HTTP client.
     /// * `led` - An LED controller.
     /// * `timer` - A timer for periodic tasks.
     /// * `dispatcher` - A dispatcher for handling triggers.
@@ -93,7 +98,8 @@ impl<'a> StateMachine<'a> {
     /// # Errors
     /// Returns an error if the state machine cannot be initialized.
     pub fn new(
-        advertiser: Advertiser<'a>,
+        advertiser: Advertiser,
+        #[cfg(feature = "wifi")] http: Client<'a>,
         led: Led<'a>,
         timer: Timer<'a>,
         dispatcher: Dispatcher,
@@ -106,6 +112,8 @@ impl<'a> StateMachine<'a> {
 
         Ok(Self {
             advertiser,
+            #[cfg(feature = "wifi")]
+            http,
             led,
             timer,
             dispatcher,
@@ -144,13 +152,28 @@ impl<'a> StateMachine<'a> {
     }
 
     /// Handles the device found active trigger.
-    fn handle_device_found_active(&mut self) {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP POST request fails.
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_device_found_active(&mut self) -> Result<()> {
         info!("{}", func!());
 
         self.state = match self.state {
             State::Off => State::Off,
-            _ => State::ActiveDeviceNearby,
+            State::ActiveDeviceNearby => State::ActiveDeviceNearby,
+            _ => {
+                #[cfg(feature = "wifi")]
+                {
+                    let status = self.http.post(HTTP_URL, None)?;
+                    info!("HTTP POST request sent, status: {}", status);
+                }
+                State::ActiveDeviceNearby
+            }
         };
+
+        Ok(())
     }
 
     /// Handles the device found inactive trigger.
@@ -191,7 +214,7 @@ impl<'a> StateMachine<'a> {
         if triggers.contains(&Trigger::ButtonPressed) {
             self.handle_button_pressed()?;
         } else if triggers.contains(&Trigger::DeviceFoundActive) {
-            self.handle_device_found_active();
+            self.handle_device_found_active()?;
         } else if triggers.contains(&Trigger::DeviceFoundInactive) {
             self.handle_device_found_inactive();
         } else if triggers.contains(&Trigger::DeviceNotFound) {

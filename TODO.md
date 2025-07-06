@@ -4,4 +4,4 @@
 - [x] fmt + clippy  
 - [x] Proper doc  
 - [x] README.md  
-- [ ] Add WiFi support (with example)  
+- [x] Add WiFi support (with example)  

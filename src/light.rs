@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::{
     color::{Rgb, BLACK},
-    infra::Switch,
+    infra::{State, Switch},
 };
 
 pub const BLINK_FREQ: u64 = 3;
@@ -66,16 +66,6 @@ fn neopixel(rgb: &Rgb, tx: &mut TxRmtDriver) -> Result<()> {
     }
     tx.start_blocking(&signal)?;
     Ok(())
-}
-
-/// Represents the state of an LED.
-///
-/// # Variants
-/// * `On` - The LED is turned on.
-/// * `Off` - The LED is turned off.
-pub enum State {
-    On,
-    Off,
 }
 
 /// Represents an LED with color and state control.

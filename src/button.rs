@@ -3,22 +3,10 @@ use esp_idf_hal::gpio::{InputMode, InputPin, PinDriver};
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    infra::Poller,
+    infra::{Poller, State, Switch},
     message::{Notifier, Trigger},
     time::{sleep, yield_now},
 };
-
-/// Represents the state of a button.
-///
-/// The button can either be `On` or `Off`.
-///
-/// # Variants
-/// * `On` - The button is in the "on" state.
-/// * `Off` - The button is in the "off" state.
-pub enum State {
-    On,
-    Off,
-}
 
 /// Represents a button with a notifier and a GPIO pin.
 ///
@@ -69,24 +57,6 @@ where
     fn pressed(&self) -> bool {
         self.pin.is_low()
     }
-
-    /// Toggles the state of the button.
-    ///
-    /// # Errors
-    /// Returns an error if the mutex lock cannot be acquired.
-    fn toggle_state(&self) -> Result<()> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
-
-        *state = match *state {
-            State::On => State::Off,
-            State::Off => State::On,
-        };
-
-        Ok(())
-    }
 }
 
 impl<T, MODE> Poller for Button<'_, T, MODE>
@@ -108,10 +78,34 @@ where
         loop {
             if self.pressed() {
                 self.notifier.notify(Trigger::ButtonPressed)?;
-                self.toggle_state()?;
+                self.toggle()?;
                 sleep(500);
             }
             yield_now();
         }
+    }
+}
+
+impl<T, MODE> Switch for Button<'_, T, MODE>
+where
+    T: InputPin,
+    MODE: InputMode,
+{
+    /// Toggles the state of the button.
+    ///
+    /// # Errors
+    /// Returns an error if the mutex lock cannot be acquired.
+    fn toggle(&mut self) -> Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
+
+        *state = match *state {
+            State::On => State::Off,
+            State::Off => State::On,
+        };
+
+        Ok(())
     }
 }
