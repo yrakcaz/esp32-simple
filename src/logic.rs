@@ -8,7 +8,7 @@ use crate::{
     ble::Advertiser,
     clock::Timer,
     color::{Rgb, GREEN, RED},
-    infra::Switch,
+    infra::{self, Switch},
     light::Led,
     message::{Dispatcher, Trigger},
 };
@@ -36,7 +36,7 @@ macro_rules! func {
 /// * `ActiveDeviceNearby` - An active device is detected nearby.
 /// * `InactiveDeviceNearby` - An inactive device is detected nearby.
 #[derive(PartialEq)]
-enum State {
+pub enum State {
     On,
     Off,
     ActiveDeviceNearby,
@@ -54,6 +54,15 @@ impl fmt::Display for State {
             State::Off => write!(f, "Off"),
             State::ActiveDeviceNearby => write!(f, "ActiveDeviceNearby"),
             State::InactiveDeviceNearby => write!(f, "InactiveDeviceNearby"),
+        }
+    }
+}
+
+impl From<infra::State> for State {
+    fn from(state: infra::State) -> Self {
+        match state {
+            infra::State::On => State::On,
+            infra::State::Off => State::Off,
         }
     }
 }
@@ -103,9 +112,8 @@ impl<'a> StateMachine<'a> {
         led: Led<'a>,
         timer: Timer<'a>,
         dispatcher: Dispatcher,
+        state: State,
     ) -> Result<Self> {
-        let state = State::Off;
-
         let mut led = led;
         led.set_color((&state).into())?;
         led.on()?;

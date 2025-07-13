@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Result};
-use esp32_nimble::{BLEAdvertisementData, BLEDevice, BLEScan};
+use esp32_nimble::{
+    enums::{PowerLevel, PowerType},
+    BLEAdvertisementData, BLEDevice, BLEScan,
+};
 use esp_idf_hal::task::block_on;
 use std::sync::{Arc, Mutex};
 
@@ -12,7 +15,21 @@ use crate::{
 /// The name of the application.
 /// This value is retrieved from the environment variable `APP_NAME`.
 const APP_NAME: &str = env!("APP_NAME");
+
+const POWER_LEVEL: PowerLevel = PowerLevel::N0; // 0 dBm
 const SCAN_FREQ: u64 = 1;
+
+/// Initializes the BLE device with the specified power levels for advertising and scanning.
+///
+/// # Errors
+/// Returns an error if the BLE device cannot be configured with the specified power levels.
+pub fn initialize_default() -> Result<()> {
+    let device = BLEDevice::take();
+    device.set_power(PowerType::Advertising, POWER_LEVEL)?;
+    device.set_power(PowerType::Scan, POWER_LEVEL)?;
+
+    Ok(())
+}
 
 /// Represents a BLE advertiser.
 ///
@@ -27,8 +44,8 @@ impl Advertiser {
     ///
     /// # Errors
     /// Returns an error if the advertiser cannot be initialized.
-    pub fn new() -> Result<Self> {
-        let ret = Self { state: State::Off };
+    pub fn new(state: State) -> Result<Self> {
+        let ret = Self { state };
         ret.apply()?;
 
         Ok(ret)
