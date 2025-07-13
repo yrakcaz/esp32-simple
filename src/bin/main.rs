@@ -15,7 +15,7 @@ use esp_idf_svc::{
 use std::sync::{Arc, Mutex};
 
 use esp_layground::{
-    ble::{Advertiser, Scanner},
+    ble::{self, Advertiser, Scanner},
     button::Button,
     clock::Timer,
     infra::{Poller, State},
@@ -27,6 +27,8 @@ use esp_layground::{
 #[cfg(feature = "wifi")]
 use esp_layground::{http::Client, wifi::Connection};
 
+const INIT_STATE: State = State::On;
+
 fn main() -> Result<()> {
     // main() should never return. Restart the device if it does.
     let _guard = ExitGuard;
@@ -36,6 +38,7 @@ fn main() -> Result<()> {
     esp_idf_hal::sys::link_patches();
 
     EspLogger::initialize_default();
+    ble::initialize_default()?;
 
     let peripherals = Peripherals::take()?;
     let ble_timer_peripheral = peripherals.timer01;
@@ -64,7 +67,7 @@ fn main() -> Result<()> {
     // to be an input to the BLE scanner. This cannot be done using the general
     // dispatcher mechanism because it can have only one listener. Hence, we
     // use a shared state between the button and the BLE scanner.
-    let button_state = Arc::new(Mutex::new(State::Off));
+    let button_state = Arc::new(Mutex::new(INIT_STATE));
     let mut button =
         Button::new(button_notifier, pin_driver, Arc::clone(&button_state))?;
     spawn(move || button.poll());
@@ -74,7 +77,7 @@ fn main() -> Result<()> {
         Scanner::new(ble_notifier, ble_timer, Arc::clone(&button_state))?;
     spawn(move || scanner.poll());
 
-    let advertiser = Advertiser::new()?;
+    let advertiser = Advertiser::new(INIT_STATE)?;
     let led = Led::new(tx_rmt_driver)?;
     let mut led_timer = Timer::new(led_timer_driver)?;
     led_timer.configure_interrupt(BLINK_FREQ, led_timer_notifier)?;
@@ -91,14 +94,26 @@ fn main() -> Result<()> {
 
         let wifi = Connection::new(wifi_driver, AuthMethod::WPA2Personal)?;
         let http = Client::new(wifi)?;
-        let mut sm =
-            StateMachine::new(advertiser, http, led, led_timer, dispatcher)?;
+        let mut sm = StateMachine::new(
+            advertiser,
+            http,
+            led,
+            led_timer,
+            dispatcher,
+            INIT_STATE.into(),
+        )?;
         sm.run()
     }
 
     #[cfg(not(feature = "wifi"))]
     {
-        let mut sm = StateMachine::new(advertiser, led, led_timer, dispatcher)?;
+        let mut sm = StateMachine::new(
+            advertiser,
+            led,
+            led_timer,
+            dispatcher,
+            INIT_STATE.into(),
+        )?;
         sm.run()
     }
 }
