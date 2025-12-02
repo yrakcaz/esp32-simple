@@ -18,21 +18,21 @@ jobs:
       fail-fast: false
       matrix:
         action:
-          - name: nofeatures
+          - name: format
             command: fmt
             args: --all -- --check --color always
-          - name: nofeatures
+          - name: client
             command: build
-            args: --release
-          - name: nofeatures
+            args: --release --bin client
+          - name: client
             command: clippy
-            args: --workspace --bins --lib -- -D warnings
-          - name: wifi
+            args: --lib --bin client -- -D warnings
+          - name: server
             command: build
-            args: --release --features=wifi
-          - name: wifi
+            args: --release --bin server
+          - name: server
             command: clippy
-            args: --workspace --bins --lib --features=wifi -- -D warnings
+            args: --lib --bin server -- -D warnings
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,7 +45,3 @@ jobs:
           version: 1.82.0.3
       - name: Run command
         run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
-        env:
-          WIFI_SSID: ${{ matrix.action.name == 'wifi' && 'TEST_SSID' || '' }}
-          WIFI_PASSWORD: ${{ matrix.action.name == 'wifi' && 'TEST_PASSWORD' || '' }}
-          HTTP_URL: ${{ matrix.action.name == 'wifi' && 'https://test.com' || '' }}

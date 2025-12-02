@@ -1,14 +1,43 @@
-#[cfg(feature = "wifi")]
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::wifi::{BlockingWifi, EspWifi};
 
-/// The SSID of the Wi-Fi network to connect to.
-/// This value is retrieved from the environment variable `WIFI_SSID`.
-const WIFI_SSID: &str = env!("WIFI_SSID");
-/// The password of the Wi-Fi network to connect to.
-/// This value is retrieved from the environment variable `WIFI_PASSWORD`.
-const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
+pub struct Config {
+    ssid: &'static str,
+    password: &'static str,
+    auth: AuthMethod,
+}
+
+impl Config {
+    fn new(ssid: &'static str, password: &'static str, auth: AuthMethod) -> Self {
+        Self {
+            ssid,
+            password,
+            auth,
+        }
+    }
+
+    pub fn ssid(&self) -> &str {
+        self.ssid
+    }
+
+    pub fn password(&self) -> &str {
+        self.password
+    }
+
+    pub fn auth(&self) -> AuthMethod {
+        self.auth
+    }
+
+    pub fn from_env() -> Result<Self> {
+        let ssid = option_env!("WIFI_SSID")
+            .ok_or_else(|| anyhow!("WIFI_SSID environment variable not set"))?;
+        let password = option_env!("WIFI_PASSWORD")
+            .ok_or_else(|| anyhow!("WIFI_PASSWORD environment variable not set"))?;
+
+        Ok(Self::new(ssid, password, AuthMethod::WPA2Personal))
+    }
+}
 
 /// Represents a Wi-Fi connection, handling its configuration and state management.
 ///
@@ -18,29 +47,28 @@ pub struct Connection<'a> {
 }
 
 impl<'a> Connection<'a> {
-    /// Creates a new `Connection` instance with the given Wi-Fi handler and credentials.
+    /// Creates a new `Connection` instance with the given Wi-Fi handler and configuration.
     ///
     /// # Arguments
     ///
     /// * `handler` - The Wi-Fi handler to manage the connection.
-    /// * `auth_method` - The authentication method to use (e.g., WPA2).
+    /// * `config` - The Wi-Fi configuration containing SSID, password, and authentication method.
     ///
     /// # Errors
     ///
     /// Returns an error if the configuration cannot be set or if the SSID/password conversion fails.
-    pub fn new(
-        handler: BlockingWifi<EspWifi<'a>>,
-        auth_method: AuthMethod,
-    ) -> Result<Self> {
+    pub fn new(handler: BlockingWifi<EspWifi<'a>>, config: &Config) -> Result<Self> {
         let configuration: Configuration =
             Configuration::Client(ClientConfiguration {
-                auth_method,
-                ssid: WIFI_SSID
+                auth_method: config.auth(),
+                ssid: config
+                    .ssid()
                     .try_into()
-                    .map_err(|()| anyhow::anyhow!("Failed to convert SSID"))?,
-                password: WIFI_PASSWORD
+                    .map_err(|()| anyhow!("Failed to convert SSID"))?,
+                password: config
+                    .password()
                     .try_into()
-                    .map_err(|()| anyhow::anyhow!("Failed to convert password"))?,
+                    .map_err(|()| anyhow!("Failed to convert password"))?,
                 ..Default::default()
             });
 

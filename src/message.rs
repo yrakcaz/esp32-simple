@@ -19,6 +19,7 @@ pub enum Trigger {
     DeviceFoundActive = 1 << 2,
     DeviceFoundInactive = 1 << 3,
     DeviceNotFound = 1 << 4,
+    GpsDataAvailable = 1 << 5,
 }
 
 impl TryFrom<Trigger> for NonZeroU32 {
@@ -118,6 +119,9 @@ impl Dispatcher {
             }
             if notification & u32::from(Trigger::DeviceNotFound) != 0 {
                 set.insert(Trigger::DeviceNotFound);
+            }
+            if notification & u32::from(Trigger::GpsDataAvailable) != 0 {
+                set.insert(Trigger::GpsDataAvailable);
             }
         }
 

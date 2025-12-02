@@ -12,10 +12,6 @@ use crate::{
     message::{Notifier, Trigger},
 };
 
-/// The name of the application.
-/// This value is retrieved from the environment variable `APP_NAME`.
-const APP_NAME: &str = env!("APP_NAME");
-
 const POWER_LEVEL: PowerLevel = PowerLevel::N0; // 0 dBm
 const SCAN_FREQ: u64 = 1;
 
@@ -36,16 +32,24 @@ pub fn initialize_default() -> Result<()> {
 /// # Type Parameters
 /// * `'a` - Lifetime of the advertiser.
 pub struct Advertiser {
+    name: String,
     state: State,
 }
 
 impl Advertiser {
     /// Creates a new `Advertiser` instance.
     ///
+    /// # Arguments
+    /// * `name` - Application name to use in BLE advertisements.
+    /// * `state` - Initial state of the advertiser.
+    ///
     /// # Errors
     /// Returns an error if the advertiser cannot be initialized.
-    pub fn new(state: State) -> Result<Self> {
-        let ret = Self { state };
+    pub fn new(name: &str, state: State) -> Result<Self> {
+        let ret = Self {
+            name: name.to_string(),
+            state,
+        };
         ret.apply()?;
 
         Ok(ret)
@@ -61,8 +65,8 @@ impl Advertiser {
         let name = match self.state {
             // TODO: This doesn't take into account the fact that multiple devices could be nearby.
             //       That could be handled with some kind of an ID mechanism...
-            State::On => format!("{APP_NAME}-Active"),
-            State::Off => format!("{APP_NAME}-Inactive"),
+            State::On => format!("{}-Active", self.name),
+            State::Off => format!("{}-Inactive", self.name),
         };
 
         advertising
@@ -99,6 +103,7 @@ pub struct Scanner<'a> {
     state: Arc<Mutex<State>>,
     device: &'a BLEDevice,
     scan: BLEScan,
+    name: String,
 }
 
 impl<'a> Scanner<'a> {
@@ -110,6 +115,7 @@ impl<'a> Scanner<'a> {
     /// * `notifier` - A notifier to send scan results.
     /// * `timer` - A timer for scan intervals.
     /// * `state` - Shared state of the scanner.
+    /// * `name` - Application name to scan for in BLE advertisements.
     ///
     /// # Errors
     /// Returns an error if the scanner cannot be initialized.
@@ -117,6 +123,7 @@ impl<'a> Scanner<'a> {
         notifier: Notifier,
         timer: Timer<'a>,
         state: Arc<Mutex<State>>,
+        name: &str,
     ) -> Result<Self> {
         let device = BLEDevice::take();
         let scan = BLEScan::new();
@@ -127,6 +134,7 @@ impl<'a> Scanner<'a> {
             state,
             device,
             scan,
+            name: name.to_string(),
         })
     }
 
@@ -135,13 +143,14 @@ impl<'a> Scanner<'a> {
     /// # Errors
     /// Returns an error if the scan fails.
     async fn do_scan(&mut self) -> Result<Option<Trigger>> {
+        let app_name = self.name.clone();
         Ok(self
             .scan
-            .start(self.device, Self::WINDOW, |_, data| {
+            .start(self.device, Self::WINDOW, move |_, data| {
                 data.name().and_then(|name| {
-                    if name == format!("{APP_NAME}-Active") {
+                    if name == format!("{app_name}-Active") {
                         Some(Trigger::DeviceFoundActive)
-                    } else if name == format!("{APP_NAME}-Inactive") {
+                    } else if name == format!("{app_name}-Inactive") {
                         Some(Trigger::DeviceFoundInactive)
                     } else {
                         None

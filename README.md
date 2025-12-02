@@ -1,7 +1,7 @@
 [![Continuous Integration](https://img.shields.io/github/actions/workflow/status/yrakcaz/esp-layground/rust_ci.yml)](https://github.com/yrakcaz/esp-layground/actions)
 [![MIT License](https://img.shields.io/github/license/yrakcaz/esp-layground?color=blue)](./LICENSE-MIT)
 
-# ESP Playground
+# ESPlayground
 
 This project demonstrates the basic functionalities of the ESP32 microcontroller, specifically on the M5Stack Atom Lite development board. It serves as a playground for experimenting with various features of the ESP32, including GPIO, BLE, timers, LEDs, WiFi, and HTTP requests.
 

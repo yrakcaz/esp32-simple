@@ -1,13 +1,17 @@
 use anyhow::{anyhow, Result};
 use log::info;
-use std::{collections::HashSet, fmt};
+use std::{
+    collections::HashSet,
+    fmt,
+    sync::{Arc, Mutex},
+};
 
-#[cfg(feature = "wifi")]
-use crate::http::{Client, HTTP_URL};
-use crate::{
+use esp_layground::{
     ble::Advertiser,
     clock::Timer,
     color::{Rgb, GREEN, RED},
+    gps::Reading,
+    http::Client,
     infra::{self, Switch},
     light::Led,
     message::{Dispatcher, Trigger},
@@ -85,47 +89,48 @@ impl From<&State> for Rgb {
 /// # Type Parameters
 /// * `'a` - Lifetime of the state machine.
 pub struct StateMachine<'a> {
+    state: State,
+    dispatcher: Dispatcher,
     advertiser: Advertiser,
-    #[cfg(feature = "wifi")]
-    http: Client<'a>,
     led: Led<'a>,
     timer: Timer<'a>,
-    dispatcher: Dispatcher,
-    state: State,
+    location: Option<Arc<Mutex<Option<Reading>>>>,
+    http: Option<Client<'a>>,
+    url: Option<&'a str>,
 }
 
 impl<'a> StateMachine<'a> {
-    /// Creates a new `StateMachine` instance.
-    ///
-    /// # Arguments
-    /// * `advertiser` - A BLE advertiser.
-    /// * `http` - An HTTP client.
-    /// * `led` - An LED controller.
-    /// * `timer` - A timer for periodic tasks.
-    /// * `dispatcher` - A dispatcher for handling triggers.
-    ///
-    /// # Errors
-    /// Returns an error if the state machine cannot be initialized.
     pub fn new(
+        state: State,
+        dispatcher: Dispatcher,
         advertiser: Advertiser,
-        #[cfg(feature = "wifi")] http: Client<'a>,
         led: Led<'a>,
         timer: Timer<'a>,
-        dispatcher: Dispatcher,
-        state: State,
+        location: Option<Arc<Mutex<Option<Reading>>>>,
+        http: Option<Client<'a>>,
     ) -> Result<Self> {
         let mut led = led;
         led.set_color((&state).into())?;
         led.on()?;
 
+        let url =
+            if http.is_some() {
+                Some(option_env!("HTTP_URL").ok_or_else(|| {
+                    anyhow!("HTTP_URL environment variable not set")
+                })?)
+            } else {
+                None
+            };
+
         Ok(Self {
+            state,
+            dispatcher,
             advertiser,
-            #[cfg(feature = "wifi")]
-            http,
             led,
             timer,
-            dispatcher,
-            state,
+            location,
+            http,
+            url,
         })
     }
 
@@ -144,21 +149,6 @@ impl<'a> StateMachine<'a> {
         self.advertiser.toggle()
     }
 
-    /// Handles the timer ticked trigger.
-    ///
-    /// # Errors
-    /// Returns an error if the LED state cannot be toggled.
-    fn handle_timer_ticked(&mut self) -> Result<()> {
-        info!("{}", func!());
-
-        match self.state {
-            State::ActiveDeviceNearby | State::InactiveDeviceNearby => {
-                self.led.toggle()
-            } // Blinking
-            _ => Ok(()),
-        }
-    }
-
     /// Handles the device found active trigger.
     ///
     /// # Errors
@@ -172,9 +162,8 @@ impl<'a> StateMachine<'a> {
             State::Off => State::Off,
             State::ActiveDeviceNearby => State::ActiveDeviceNearby,
             _ => {
-                #[cfg(feature = "wifi")]
-                {
-                    let status = self.http.post(HTTP_URL, None)?;
+                if let (Some(http), Some(url)) = (&mut self.http, self.url) {
+                    let status = http.post(url, None)?;
                     info!("HTTP POST request sent, status: {}", status);
                 }
                 State::ActiveDeviceNearby
@@ -204,6 +193,39 @@ impl<'a> StateMachine<'a> {
         };
     }
 
+    /// Handles the timer ticked trigger.
+    ///
+    /// # Errors
+    /// Returns an error if the LED state cannot be toggled.
+    fn handle_timer_ticked(&mut self) -> Result<()> {
+        info!("{}", func!());
+
+        match self.state {
+            State::ActiveDeviceNearby | State::InactiveDeviceNearby => {
+                self.led.toggle()
+            } // Blinking
+            _ => Ok(()),
+        }
+    }
+
+    // FIXME don't forget to add missing doc everywhere... fmt+clippy! and update TODO and README..
+    fn handle_gps_data(&mut self) -> Result<()> {
+        info!("{}", func!());
+
+        if let Some(location) = &self.location {
+            let data = location
+                .lock()
+                .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
+            if let Some(reading) = data.as_ref() {
+                // FIXME What we actually need to do is feed this into something that will compute and keep track of the average and max speeds.
+                //       These data then need to be transmitted through BLE to the server then through HTTP from the server.
+                info!("GPS Reading: {}", reading);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Handles a set of triggers.
     ///
     /// # Arguments
@@ -229,6 +251,8 @@ impl<'a> StateMachine<'a> {
             self.handle_device_not_found();
         } else if triggers.contains(&Trigger::TimerTicked) {
             self.handle_timer_ticked()?;
+        } else if triggers.contains(&Trigger::GpsDataAvailable) {
+            self.handle_gps_data()?;
         } else {
             Err(anyhow!("Unknown triggers: {:?}", triggers))?;
         }

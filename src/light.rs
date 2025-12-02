@@ -7,8 +7,6 @@ use crate::{
     infra::{State, Switch},
 };
 
-pub const BLINK_FREQ: u64 = 3;
-
 /// Sends an RGB color value to a `NeoPixel` LED using the RMT peripheral.
 ///
 /// # Arguments

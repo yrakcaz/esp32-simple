@@ -40,22 +40,22 @@ impl From<&Rgb> for u32 {
     }
 }
 
-/// Brightness level for predefined colors.
-const BRIGHTNESS: u8 = 25;
+/// Default brightness level for predefined colors.
+const DEFAULT_BRIGHTNESS: u8 = 25;
 
 /// Predefined black color.
 pub const BLACK: Rgb = Rgb { r: 0, g: 0, b: 0 };
 
-/// Predefined green color.
+/// Predefined green color with default brightness.
 pub const GREEN: Rgb = Rgb {
     r: 0,
-    g: BRIGHTNESS,
+    g: DEFAULT_BRIGHTNESS,
     b: 0,
 };
 
-/// Predefined red color.
+/// Predefined red color with default brightness.
 pub const RED: Rgb = Rgb {
-    r: BRIGHTNESS,
+    r: DEFAULT_BRIGHTNESS,
     g: 0,
     b: 0,
 };
