@@ -17,14 +17,17 @@ impl Config {
         }
     }
 
+    #[must_use]
     pub fn ssid(&self) -> &str {
         self.ssid
     }
 
+    #[must_use]
     pub fn password(&self) -> &str {
         self.password
     }
 
+    #[must_use]
     pub fn auth(&self) -> AuthMethod {
         self.auth
     }

@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     infra::{Poller, State},
-    message::Notifier,
+    message::{Notifier, Trigger},
     time::yield_now,
 };
 
@@ -17,16 +17,32 @@ const READ_TIMEOUT: u32 = 1000;
 pub struct Reading {
     latitude: f64,
     longitude: f64,
-    altitude: f32,
+    speed_mps: Option<f32>,
 }
 
 impl Reading {
-    fn new(latitude: f64, longitude: f64, altitude: f32) -> Self {
+    #[must_use]
+    pub fn new(latitude: f64, longitude: f64, speed_mps: Option<f32>) -> Self {
         Self {
             latitude,
             longitude,
-            altitude,
+            speed_mps,
         }
+    }
+
+    #[must_use]
+    pub fn latitude(&self) -> f64 {
+        self.latitude
+    }
+
+    #[must_use]
+    pub fn longitude(&self) -> f64 {
+        self.longitude
+    }
+
+    #[must_use]
+    pub fn speed_mps(&self) -> Option<f32> {
+        self.speed_mps
     }
 }
 
@@ -34,29 +50,41 @@ impl Display for Reading {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Lat: {}, Lon: {}, Alt: {}",
-            self.latitude, self.longitude, self.altitude
-        )
+            "Lat: {}, Lon: {}, Speed: ",
+            self.latitude, self.longitude
+        )?;
+        match self.speed_mps {
+            Some(s) => write!(f, "{s:.2} m/s"),
+            None => write!(f, "N/A"),
+        }
     }
 }
 
-pub struct Sensor<'a> {
-    notifier: Notifier,
+/// Represents a GPS sensor.
+///
+/// # Type Parameters
+/// * `'a` - Lifetime of the sensor.
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Sensor<'a, T: Trigger> {
+    notifier: Notifier<T>,
+    trigger: &'static T,
     state: Arc<Mutex<State>>,
     uart: UartRxDriver<'a>,
     data: Arc<Mutex<Option<Reading>>>,
     buffer: String,
 }
 
-impl<'a> Sensor<'a> {
+impl<'a, T: Trigger> Sensor<'a, T> {
     pub fn new(
-        notifier: Notifier,
+        notifier: Notifier<T>,
+        trigger: &'static T,
         state: Arc<Mutex<State>>,
         uart: UartRxDriver<'a>,
         data: Arc<Mutex<Option<Reading>>>,
     ) -> Self {
         Self {
             notifier,
+            trigger,
             state,
             uart,
             data,
@@ -76,22 +104,21 @@ impl<'a> Sensor<'a> {
             if let Some(last_idx) = self.buffer.rfind("\r\n") {
                 let range_end = last_idx + 2;
 
-                {
-                    let complete = &self.buffer[..range_end];
-                    for line in complete.split("\r\n") {
-                        if line.trim().is_empty() {
-                            continue;
-                        }
+                let complete = &self.buffer[..range_end];
+                for line in complete.split("\r\n") {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
 
-                        let mut parser = Nmea::default();
-                        if let Ok(SentenceType::GGA) = parser.parse(line) {
-                            if let (Some(lat), Some(lon), Some(alt)) = (
-                                parser.latitude(),
-                                parser.longitude(),
-                                parser.altitude(),
-                            ) {
-                                ret = Some(Reading::new(lat, lon, alt));
-                            }
+                    let mut parser = Nmea::default();
+                    if let Ok(SentenceType::RMC) = parser.parse(line) {
+                        if let (Some(lat), Some(lon)) =
+                            (parser.latitude(), parser.longitude())
+                        {
+                            let speed_mps = parser
+                                .speed_over_ground
+                                .map(|knots| knots * 0.514_444);
+                            ret = Some(Reading::new(lat, lon, speed_mps));
                         }
                     }
                 }
@@ -108,15 +135,16 @@ impl<'a> Sensor<'a> {
     }
 }
 
-impl Poller for Sensor<'_> {
+impl<T: Trigger> Poller for Sensor<'_, T> {
     fn poll(&mut self) -> Result<!> {
         loop {
             yield_now();
 
-            if let State::Off = *self
+            if self
                 .state
                 .lock()
                 .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?
+                .is_off()
             {
                 continue;
             }
@@ -128,8 +156,7 @@ impl Poller for Sensor<'_> {
                     .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
 
                 *data = Some(reading);
-                self.notifier
-                    .notify(crate::message::Trigger::GpsDataAvailable)?;
+                self.notifier.notify(self.trigger)?;
             }
         }
     }

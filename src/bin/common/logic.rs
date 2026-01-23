@@ -1,21 +1,17 @@
-use anyhow::{anyhow, Result};
-use log::info;
-use std::{
-    collections::HashSet,
-    fmt,
-    sync::{Arc, Mutex},
-};
+use anyhow::Result;
+use std::collections::HashSet;
 
 use esp_layground::{
     ble::Advertiser,
     clock::Timer,
     color::{Rgb, GREEN, RED},
-    gps::Reading,
-    http::Client,
     infra::{self, Switch},
     light::Led,
-    message::{Dispatcher, Trigger},
+    message::Dispatcher,
+    trigger_enum,
 };
+
+// FIXME don't forget to add missing doc everywhere... and update README. And update instructions.md so it's automatic in the future..
 
 macro_rules! func {
     () => {{
@@ -31,96 +27,83 @@ macro_rules! func {
         }
     }};
 }
+pub(crate) use func;
 
-/// Represents the state of the application.
-///
-/// # Variants
-/// * `On` - The application is active.
-/// * `Off` - The application is inactive.
-/// * `ActiveDeviceNearby` - An active device is detected nearby.
-/// * `InactiveDeviceNearby` - An inactive device is detected nearby.
+macro_rules! trace_func {
+    () => {
+        log::debug!("{}", $crate::common::logic::func!())
+    };
+}
+pub(crate) use trace_func;
+
+trigger_enum! {
+    #[derive(Debug, Eq, Hash, PartialEq)]
+    pub enum Trigger {
+        ButtonPressed = 1 << 0,
+        TimerTicked = 1 << 1,
+        DeviceFoundActive = 1 << 2,
+        DeviceFoundInactive = 1 << 3,
+        DeviceNotFound = 1 << 4,
+        GpsDataAvailable = 1 << 5,
+    }
+}
+
+/// Represents whether a nearby device is active or inactive.
 #[derive(PartialEq)]
-pub enum State {
-    On,
-    Off,
-    ActiveDeviceNearby,
-    InactiveDeviceNearby,
+pub enum DeviceNearby {
+    Active,
+    Inactive,
 }
 
-impl fmt::Display for State {
-    /// Formats the state as a string.
-    ///
-    /// # Returns
-    /// A string representation of the state.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+/// Application state: either Off or On with optional device nearby info.
+pub type State = infra::State<DeviceNearby>;
+
+/// Extension trait for app-specific State behavior.
+pub trait StateExt {
+    fn to_str(&self) -> &'static str;
+    fn to_color(&self) -> Rgb;
+}
+
+impl StateExt for State {
+    fn to_str(&self) -> &'static str {
         match self {
-            State::On => write!(f, "On"),
-            State::Off => write!(f, "Off"),
-            State::ActiveDeviceNearby => write!(f, "ActiveDeviceNearby"),
-            State::InactiveDeviceNearby => write!(f, "InactiveDeviceNearby"),
+            State::Off => "Off",
+            State::On(None) => "On",
+            State::On(Some(DeviceNearby::Active)) => "ActiveDeviceNearby",
+            State::On(Some(DeviceNearby::Inactive)) => "InactiveDeviceNearby",
+        }
+    }
+
+    fn to_color(&self) -> Rgb {
+        match self {
+            State::On(None) | State::On(Some(DeviceNearby::Active)) => GREEN,
+            State::Off | State::On(Some(DeviceNearby::Inactive)) => RED,
         }
     }
 }
 
-impl From<infra::State> for State {
-    fn from(state: infra::State) -> Self {
-        match state {
-            infra::State::On => State::On,
-            infra::State::Off => State::Off,
-        }
-    }
+pub struct Core<'a> {
+    pub state: State,
+    pub dispatcher: Dispatcher<Trigger>,
+    pub advertiser: Advertiser,
+    pub led: Led<'a>,
+    pub timer: Timer<'a, Trigger>,
 }
 
-impl From<&State> for Rgb {
-    /// Converts a `State` to an `Rgb` color.
+impl<'a> Core<'a> {
+    /// Creates a new core with initialized LED.
     ///
-    /// # Returns
-    /// An `Rgb` color corresponding to the state.
-    fn from(state: &State) -> Self {
-        match state {
-            State::On | State::ActiveDeviceNearby => GREEN,
-            State::Off | State::InactiveDeviceNearby => RED,
-        }
-    }
-}
-
-/// Represents the state machine for the application.
-///
-/// # Type Parameters
-/// * `'a` - Lifetime of the state machine.
-pub struct StateMachine<'a> {
-    state: State,
-    dispatcher: Dispatcher,
-    advertiser: Advertiser,
-    led: Led<'a>,
-    timer: Timer<'a>,
-    location: Option<Arc<Mutex<Option<Reading>>>>,
-    http: Option<Client<'a>>,
-    url: Option<&'a str>,
-}
-
-impl<'a> StateMachine<'a> {
+    /// # Errors
+    /// Returns an error if LED initialization fails.
     pub fn new(
         state: State,
-        dispatcher: Dispatcher,
+        dispatcher: Dispatcher<Trigger>,
         advertiser: Advertiser,
-        led: Led<'a>,
-        timer: Timer<'a>,
-        location: Option<Arc<Mutex<Option<Reading>>>>,
-        http: Option<Client<'a>>,
+        mut led: Led<'a>,
+        timer: Timer<'a, Trigger>,
     ) -> Result<Self> {
-        let mut led = led;
-        led.set_color((&state).into())?;
+        led.set_color(state.to_color())?;
         led.on()?;
-
-        let url =
-            if http.is_some() {
-                Some(option_env!("HTTP_URL").ok_or_else(|| {
-                    anyhow!("HTTP_URL environment variable not set")
-                })?)
-            } else {
-                None
-            };
 
         Ok(Self {
             state,
@@ -128,154 +111,105 @@ impl<'a> StateMachine<'a> {
             advertiser,
             led,
             timer,
-            location,
-            http,
-            url,
         })
     }
 
-    /// Handles the button pressed trigger.
-    ///
-    /// # Errors
-    /// Returns an error if the advertiser state cannot be toggled.
-    fn handle_button_pressed(&mut self) -> Result<()> {
-        info!("{}", func!());
-
-        self.state = match self.state {
-            State::Off => State::On,
-            _ => State::Off,
-        };
-
-        self.advertiser.toggle()
-    }
-
-    /// Handles the device found active trigger.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the HTTP POST request fails.
-    #[allow(clippy::unnecessary_wraps)]
-    fn handle_device_found_active(&mut self) -> Result<()> {
-        info!("{}", func!());
-
-        self.state = match self.state {
-            State::Off => State::Off,
-            State::ActiveDeviceNearby => State::ActiveDeviceNearby,
-            _ => {
-                if let (Some(http), Some(url)) = (&mut self.http, self.url) {
-                    let status = http.post(url, None)?;
-                    info!("HTTP POST request sent, status: {}", status);
-                }
-                State::ActiveDeviceNearby
-            }
-        };
-
-        Ok(())
-    }
-
-    /// Handles the device found inactive trigger.
-    fn handle_device_found_inactive(&mut self) {
-        info!("{}", func!());
-
-        self.state = match self.state {
-            State::Off => State::Off,
-            _ => State::InactiveDeviceNearby,
-        };
-    }
-
-    /// Handles the device not found trigger.
-    fn handle_device_not_found(&mut self) {
-        info!("{}", func!());
-
-        self.state = match self.state {
-            State::Off => State::Off,
-            _ => State::On,
-        };
-    }
-
-    /// Handles the timer ticked trigger.
+    /// Handles the timer ticked trigger (LED blinking when device nearby).
     ///
     /// # Errors
     /// Returns an error if the LED state cannot be toggled.
-    fn handle_timer_ticked(&mut self) -> Result<()> {
-        info!("{}", func!());
+    pub fn handle_timer_ticked(&mut self) -> Result<()> {
+        trace_func!();
 
         match self.state {
-            State::ActiveDeviceNearby | State::InactiveDeviceNearby => {
-                self.led.toggle()
-            } // Blinking
+            State::On(Some(_)) => self.led.toggle(),
             _ => Ok(()),
         }
     }
 
-    // FIXME don't forget to add missing doc everywhere... fmt+clippy! and update TODO and README..
-    fn handle_gps_data(&mut self) -> Result<()> {
-        info!("{}", func!());
+    /// Handles the device found inactive trigger.
+    pub fn handle_device_found_inactive(&mut self) {
+        trace_func!();
 
-        if let Some(location) = &self.location {
-            let data = location
-                .lock()
-                .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
-            if let Some(reading) = data.as_ref() {
-                // FIXME What we actually need to do is feed this into something that will compute and keep track of the average and max speeds.
-                //       These data then need to be transmitted through BLE to the server then through HTTP from the server.
-                info!("GPS Reading: {}", reading);
-            }
+        if self.state.is_on() {
+            self.state = State::On(Some(DeviceNearby::Inactive));
         }
-
-        Ok(())
     }
 
-    /// Handles a set of triggers.
+    /// Handles the device not found trigger.
+    pub fn handle_device_not_found(&mut self) {
+        trace_func!();
+
+        if self.state.is_on() {
+            self.state = State::on();
+        }
+    }
+
+    /// Handles common triggers, returning true if handled.
     ///
-    /// # Arguments
-    /// * `triggers` - A set of triggers to handle.
+    /// Handles: ButtonPressed, DeviceFoundActive, DeviceFoundInactive,
+    /// DeviceNotFound, TimerTicked.
     ///
     /// # Errors
-    /// Returns an error if any trigger handling fails.
-    fn handle_triggers(&mut self, triggers: &HashSet<Trigger>) -> Result<()> {
-        info!(
+    /// Returns an error if trigger handling fails.
+    pub fn handle_common_triggers(
+        &mut self,
+        triggers: &HashSet<&'static Trigger>,
+        on_button_pressed: impl FnOnce(&mut Self) -> Result<()>,
+        on_device_found_active: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<bool> {
+        log::debug!(
             "{}: triggers: {:?}, state: {}",
             func!(),
             triggers,
-            self.state
+            self.state.to_str()
         );
 
+        let mut handled = true;
         if triggers.contains(&Trigger::ButtonPressed) {
-            self.handle_button_pressed()?;
+            on_button_pressed(self)?;
         } else if triggers.contains(&Trigger::DeviceFoundActive) {
-            self.handle_device_found_active()?;
+            on_device_found_active(self)?;
         } else if triggers.contains(&Trigger::DeviceFoundInactive) {
             self.handle_device_found_inactive();
         } else if triggers.contains(&Trigger::DeviceNotFound) {
             self.handle_device_not_found();
         } else if triggers.contains(&Trigger::TimerTicked) {
             self.handle_timer_ticked()?;
-        } else if triggers.contains(&Trigger::GpsDataAvailable) {
-            self.handle_gps_data()?;
         } else {
-            Err(anyhow!("Unknown triggers: {:?}", triggers))?;
+            handled = false;
         }
 
+        Ok(handled)
+    }
+
+    /// Updates LED state based on current state.
+    ///
+    /// # Errors
+    /// Returns an error if LED or timer operations fail.
+    pub fn update_led(&mut self) -> Result<()> {
+        self.led.set_color(self.state.to_color())?;
+        if matches!(self.state, State::On(None) | State::Off) {
+            self.timer.off()?;
+            self.led.on()?;
+        } else {
+            self.timer.on()?;
+        }
         Ok(())
     }
 
-    /// Runs the state machine.
+    /// Runs the main loop, delegating trigger handling to the provided closure.
     ///
     /// # Errors
-    /// Returns an error if the state machine encounters an issue during execution.
-    pub fn run(&mut self) -> Result<()> {
+    /// Returns an error if any operation fails.
+    pub fn run<F>(&mut self, mut handle_triggers: F) -> Result<()>
+    where
+        F: FnMut(&mut Self, &HashSet<&'static Trigger>) -> Result<()>,
+    {
         loop {
             let triggers = self.dispatcher.collect()?;
-            self.handle_triggers(&triggers)?;
-
-            self.led.set_color((&self.state).into())?;
-            if self.state == State::On || self.state == State::Off {
-                self.timer.off()?;
-                self.led.on()?;
-            } else {
-                self.timer.on()?;
-            }
+            handle_triggers(self, &triggers)?;
+            self.update_led()?;
         }
     }
 }

@@ -12,14 +12,48 @@ pub trait Poller {
     fn poll(&mut self) -> Result<!>;
 }
 
-/// Represents the state of a Switch.
+/// Represents an on/off state, optionally carrying additional data when on.
+///
+/// # Type Parameters
+/// * `T` - The type of additional data carried when in the `On` state. Defaults to `()`.
 ///
 /// # Variants
-/// * `On` - The Switch is turned on.
-/// * `Off` - The Switch is turned off.
-pub enum State {
-    On,
+/// * `Off` - The switch is turned off.
+/// * `On(Option<T>)` - The switch is on, optionally with additional data.
+pub enum State<T = ()> {
     Off,
+    On(Option<T>),
+}
+
+impl<T> State<T> {
+    /// Creates a new `State` in the `On` position with no additional data.
+    pub const fn on() -> Self {
+        State::On(None)
+    }
+
+    /// Creates a new `State` in the `Off` position.
+    #[must_use]
+    pub const fn off() -> Self {
+        State::Off
+    }
+
+    /// Returns `true` if the state is `Off`.
+    pub fn is_off(&self) -> bool {
+        matches!(self, State::Off)
+    }
+
+    /// Returns `true` if the state is `On`.
+    pub fn is_on(&self) -> bool {
+        matches!(self, State::On(_))
+    }
+
+    /// Toggles between `On` and `Off`, clearing any additional data.
+    pub fn toggle(&mut self) {
+        *self = match self {
+            State::On(_) => State::Off,
+            State::Off => State::On(None),
+        };
+    }
 }
 
 /// A trait representing a switch that can toggle its state.

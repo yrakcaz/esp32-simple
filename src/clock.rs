@@ -10,11 +10,13 @@ use crate::{
 ///
 /// # Type Parameters
 /// * `'a` - Lifetime of the timer.
-pub struct Timer<'a> {
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Timer<'a, T: Trigger> {
     timer: TimerDriver<'a>,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl<'a> Timer<'a> {
+impl<'a, T: Trigger> Timer<'a, T> {
     /// Creates a new `Timer` instance.
     ///
     /// # Arguments
@@ -23,7 +25,10 @@ impl<'a> Timer<'a> {
     /// # Errors
     /// Returns an error if the timer cannot be initialized.
     pub fn new(timer: TimerDriver<'a>) -> Result<Self> {
-        Ok(Self { timer })
+        Ok(Self {
+            timer,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Configures the timer interrupt.
@@ -31,19 +36,19 @@ impl<'a> Timer<'a> {
     /// # Arguments
     /// * `freq` - Frequency of the timer interrupt.
     /// * `notifier` - A notifier to send timer tick events.
+    /// * `trigger` - The trigger to emit when the timer ticks.
     ///
     /// # Errors
     /// Returns an error if the interrupt cannot be configured.
     pub fn configure_interrupt(
         &mut self,
         freq: u64,
-        notifier: Notifier,
+        notifier: Notifier<T>,
+        trigger: &'static T,
     ) -> Result<()> {
         unsafe {
             self.timer.subscribe(move || {
-                notifier
-                    .notify(Trigger::TimerTicked)
-                    .unwrap_or_else(|_| failure());
+                notifier.notify(trigger).unwrap_or_else(|_| failure());
             })?;
         }
 

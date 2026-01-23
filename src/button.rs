@@ -14,37 +14,44 @@ use crate::{
 /// * `'a` - Lifetime of the button.
 /// * `T` - Type of the GPIO pin.
 /// * `MODE` - Input mode of the GPIO pin.
-pub struct Button<'a, T, MODE>
+/// * `TR` - The trigger type implementing the `Trigger` trait.
+pub struct Button<'a, T, MODE, TR>
 where
     T: InputPin,
     MODE: InputMode,
+    TR: Trigger,
 {
-    notifier: Notifier,
+    notifier: Notifier<TR>,
+    trigger: &'static TR,
     pin: PinDriver<'a, T, MODE>,
     state: Arc<Mutex<State>>,
 }
 
-impl<'a, T, MODE> Button<'a, T, MODE>
+impl<'a, T, MODE, TR> Button<'a, T, MODE, TR>
 where
     T: InputPin,
     MODE: InputMode,
+    TR: Trigger,
 {
     /// Creates a new `Button` instance.
     ///
     /// # Arguments
     /// * `notifier` - A notifier to send button press events.
+    /// * `trigger` - The trigger to emit when the button is pressed.
     /// * `pin` - A GPIO pin driver.
     /// * `state` - Shared state of the button.
     ///
     /// # Errors
     /// Returns an error if the button cannot be initialized.
     pub fn new(
-        notifier: Notifier,
+        notifier: Notifier<TR>,
+        trigger: &'static TR,
         pin: PinDriver<'a, T, MODE>,
         state: Arc<Mutex<State>>,
     ) -> Result<Self> {
         Ok(Self {
             notifier,
+            trigger,
             pin,
             state,
         })
@@ -59,10 +66,11 @@ where
     }
 }
 
-impl<T, MODE> Poller for Button<'_, T, MODE>
+impl<T, MODE, TR> Poller for Button<'_, T, MODE, TR>
 where
     T: InputPin,
     MODE: InputMode,
+    TR: Trigger,
 {
     /// Polls the button for state changes.
     ///
@@ -77,7 +85,7 @@ where
 
         loop {
             if self.pressed() {
-                self.notifier.notify(Trigger::ButtonPressed)?;
+                self.notifier.notify(self.trigger)?;
                 self.toggle()?;
                 sleep(500);
             }
@@ -86,10 +94,11 @@ where
     }
 }
 
-impl<T, MODE> Switch for Button<'_, T, MODE>
+impl<T, MODE, TR> Switch for Button<'_, T, MODE, TR>
 where
     T: InputPin,
     MODE: InputMode,
+    TR: Trigger,
 {
     /// Toggles the state of the button.
     ///
@@ -101,10 +110,7 @@ where
             .lock()
             .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?;
 
-        *state = match *state {
-            State::On => State::Off,
-            State::Off => State::On,
-        };
+        state.toggle();
 
         Ok(())
     }

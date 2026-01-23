@@ -12,43 +12,45 @@ use crate::{
     message::{Notifier, Trigger},
 };
 
-const POWER_LEVEL: PowerLevel = PowerLevel::N0; // 0 dBm
-const SCAN_FREQ: u64 = 1;
-
-/// Initializes the BLE device with the specified power levels for advertising and scanning.
+/// Initializes the BLE device with the specified power level for advertising and scanning.
+///
+/// # Arguments
+/// * `power_level` - The power level to use for both advertising and scanning.
 ///
 /// # Errors
 /// Returns an error if the BLE device cannot be configured with the specified power levels.
-pub fn initialize_default() -> Result<()> {
+pub fn initialize(power_level: PowerLevel) -> Result<()> {
     let device = BLEDevice::take();
-    device.set_power(PowerType::Advertising, POWER_LEVEL)?;
-    device.set_power(PowerType::Scan, POWER_LEVEL)?;
+    device.set_power(PowerType::Advertising, power_level)?;
+    device.set_power(PowerType::Scan, power_level)?;
 
     Ok(())
 }
 
+/// Function type for deriving advertisement name and payload from state.
+type DeriveFn = fn(&State, Option<&[u8]>) -> (String, Option<Vec<u8>>);
+
 /// Represents a BLE advertiser.
-///
-/// # Type Parameters
-/// * `'a` - Lifetime of the advertiser.
 pub struct Advertiser {
-    name: String,
     state: State,
+    payload: Option<Vec<u8>>,
+    derive: DeriveFn,
 }
 
 impl Advertiser {
     /// Creates a new `Advertiser` instance.
     ///
     /// # Arguments
-    /// * `name` - Application name to use in BLE advertisements.
     /// * `state` - Initial state of the advertiser.
+    /// * `derive` - Function to derive advertisement name and payload from state.
     ///
     /// # Errors
     /// Returns an error if the advertiser cannot be initialized.
-    pub fn new(name: &str, state: State) -> Result<Self> {
+    pub fn new(state: State, derive: DeriveFn) -> Result<Self> {
         let ret = Self {
-            name: name.to_string(),
             state,
+            payload: None,
+            derive,
         };
         ret.apply()?;
 
@@ -62,19 +64,23 @@ impl Advertiser {
     fn apply(&self) -> Result<()> {
         let device = BLEDevice::take();
         let advertising = device.get_advertising();
-        let name = match self.state {
-            // TODO: This doesn't take into account the fact that multiple devices could be nearby.
-            //       That could be handled with some kind of an ID mechanism...
-            State::On => format!("{}-Active", self.name),
-            State::Off => format!("{}-Inactive", self.name),
-        };
+        let (name, payload) = (self.derive)(&self.state, self.payload.as_deref());
 
-        advertising
-            .lock()
-            .set_data(BLEAdvertisementData::new().name(&name))?;
+        let mut data = BLEAdvertisementData::new();
+        data.name(&name);
+        if let Some(bytes) = &payload {
+            data.manufacturer_data(bytes);
+        }
+
+        advertising.lock().set_data(&mut data)?;
         advertising.lock().start()?;
 
         Ok(())
+    }
+
+    pub fn set_payload(&mut self, payload: Option<Vec<u8>>) -> Result<()> {
+        self.payload = payload;
+        self.apply()
     }
 }
 
@@ -84,12 +90,44 @@ impl Switch for Advertiser {
     /// # Errors
     /// Returns an error if the state cannot be toggled or applied.
     fn toggle(&mut self) -> Result<()> {
-        self.state = match self.state {
-            State::On => State::Off,
-            State::Off => State::On,
-        };
+        self.state.toggle();
 
         self.apply()
+    }
+}
+
+/// Configuration for BLE scanning behavior.
+///
+/// # Type Parameters
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct ScannerConfig<T: Trigger> {
+    triggers: fn(&str) -> Option<&'static T>,
+    default_trigger: &'static T,
+    payload_trigger: &'static T,
+    scan_freq_hz: u64,
+}
+
+impl<T: Trigger> ScannerConfig<T> {
+    /// Creates a new scan configuration.
+    ///
+    /// # Arguments
+    /// * `triggers` - Function to look up a trigger by BLE device name.
+    /// * `default_trigger` - Trigger to emit when no matching device is found.
+    /// * `payload_trigger` - Store payload when this trigger matches.
+    /// * `scan_freq_hz` - Scan frequency in Hz.
+    #[must_use]
+    pub fn new(
+        triggers: fn(&str) -> Option<&'static T>,
+        default_trigger: &'static T,
+        payload_trigger: &'static T,
+        scan_freq_hz: u64,
+    ) -> Self {
+        Self {
+            triggers,
+            default_trigger,
+            payload_trigger,
+            scan_freq_hz,
+        }
     }
 }
 
@@ -97,16 +135,18 @@ impl Switch for Advertiser {
 ///
 /// # Type Parameters
 /// * `'a` - Lifetime of the scanner.
-pub struct Scanner<'a> {
-    notifier: Notifier,
-    timer: Timer<'a>,
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Scanner<'a, T: Trigger> {
+    notifier: Notifier<T>,
+    timer: Timer<'a, T>,
     state: Arc<Mutex<State>>,
+    payload: Arc<Mutex<Option<Vec<u8>>>>,
     device: &'a BLEDevice,
     scan: BLEScan,
-    name: String,
+    config: ScannerConfig<T>,
 }
 
-impl<'a> Scanner<'a> {
+impl<'a, T: Trigger> Scanner<'a, T> {
     const WINDOW: i32 = 1000;
 
     /// Creates a new `Scanner` instance.
@@ -115,15 +155,17 @@ impl<'a> Scanner<'a> {
     /// * `notifier` - A notifier to send scan results.
     /// * `timer` - A timer for scan intervals.
     /// * `state` - Shared state of the scanner.
-    /// * `name` - Application name to scan for in BLE advertisements.
+    /// * `payload` - Shared storage for BLE payload data.
+    /// * `config` - Scan configuration (triggers, frequency, etc.).
     ///
     /// # Errors
     /// Returns an error if the scanner cannot be initialized.
     pub fn new(
-        notifier: Notifier,
-        timer: Timer<'a>,
+        notifier: Notifier<T>,
+        timer: Timer<'a, T>,
         state: Arc<Mutex<State>>,
-        name: &str,
+        payload: Arc<Mutex<Option<Vec<u8>>>>,
+        config: ScannerConfig<T>,
     ) -> Result<Self> {
         let device = BLEDevice::take();
         let scan = BLEScan::new();
@@ -132,9 +174,10 @@ impl<'a> Scanner<'a> {
             notifier,
             timer,
             state,
+            payload,
             device,
             scan,
-            name: name.to_string(),
+            config,
         })
     }
 
@@ -142,16 +185,32 @@ impl<'a> Scanner<'a> {
     ///
     /// # Errors
     /// Returns an error if the scan fails.
-    async fn do_scan(&mut self) -> Result<Option<Trigger>> {
-        let app_name = self.name.clone();
+    async fn do_scan(&mut self) -> Result<Option<&'static T>> {
+        let triggers = self.config.triggers;
+        let payload = Arc::clone(&self.payload);
+        let payload_trigger = self.config.payload_trigger;
         Ok(self
             .scan
             .start(self.device, Self::WINDOW, move |_, data| {
                 data.name().and_then(|name| {
-                    if name == format!("{app_name}-Active") {
-                        Some(Trigger::DeviceFoundActive)
-                    } else if name == format!("{app_name}-Inactive") {
-                        Some(Trigger::DeviceFoundInactive)
+                    let name = String::from_utf8_lossy(name);
+                    if let Some(trigger) = triggers(&name) {
+                        if trigger == payload_trigger {
+                            if let Some(mfg) = data.manufacture_data() {
+                                if let Ok(mut stored) = payload.lock() {
+                                    // manufacture_data() splits the raw bytes into a
+                                    // 2-byte company_identifier and the remaining payload.
+                                    // We reconstruct the original bytes here.
+                                    let mut full = mfg
+                                        .company_identifier
+                                        .to_le_bytes()
+                                        .to_vec();
+                                    full.extend_from_slice(mfg.payload);
+                                    *stored = Some(full);
+                                }
+                            }
+                        }
+                        Some(trigger)
                     } else {
                         None
                     }
@@ -161,7 +220,7 @@ impl<'a> Scanner<'a> {
     }
 }
 
-impl Poller for Scanner<'_> {
+impl<T: Trigger> Poller for Scanner<'_, T> {
     /// Polls the BLE scanner for devices.
     ///
     /// This function continuously scans for BLE devices and notifies the results.
@@ -171,12 +230,13 @@ impl Poller for Scanner<'_> {
     fn poll(&mut self) -> Result<!> {
         block_on(async {
             loop {
-                self.timer.delay(SCAN_FREQ).await?;
+                self.timer.delay(self.config.scan_freq_hz).await?;
 
-                if let State::Off = *self
+                if self
                     .state
                     .lock()
                     .map_err(|e| anyhow!("Mutex lock error: {:?}", e))?
+                    .is_off()
                 {
                     continue;
                 }
@@ -184,7 +244,7 @@ impl Poller for Scanner<'_> {
                 let trigger = if let Some(trigger) = self.do_scan().await? {
                     trigger
                 } else {
-                    Trigger::DeviceNotFound
+                    self.config.default_trigger
                 };
 
                 self.notifier.notify(trigger)?;

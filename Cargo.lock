@@ -651,7 +651,6 @@ dependencies = [
  "esp32-nimble",
  "log",
  "nmea",
- "num_enum",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use esp32_nimble::enums::PowerLevel;
 use esp_idf_hal::{
     gpio::{self, PinDriver},
     modem::Modem,
@@ -11,7 +12,7 @@ use esp_idf_hal::{
 use std::sync::{Arc, Mutex};
 
 use esp_layground::{
-    ble::{self, Advertiser, Scanner},
+    ble::{self, Advertiser, Scanner, ScannerConfig},
     button::Button,
     clock::Timer,
     infra::{Poller, State},
@@ -20,18 +21,24 @@ use esp_layground::{
     thread::spawn,
 };
 
+use super::logic::Trigger;
+
+const BLE_ACTIVE_SUFFIX: &str = "-Active";
+const BLE_INACTIVE_SUFFIX: &str = "-Inactive";
+const BLE_POWER_LEVEL: PowerLevel = PowerLevel::N0;
+const BLE_SCAN_FREQ_HZ: u64 = 1;
 const BLINK_FREQ_HZ: u64 = 3;
-const INIT_STATE: State = State::On;
 
 /// Common hardware context shared by both server and client binaries.
 pub struct Context<'a> {
-    dispatcher: Dispatcher,
+    dispatcher: Dispatcher<Trigger>,
     advertiser: Advertiser,
     led: Led<'a>,
-    led_timer: Timer<'a>,
+    led_timer: Timer<'a, Trigger>,
     button_state: Arc<Mutex<State>>,
     uart_driver: UartRxDriver<'a>,
-    gps_notifier: Notifier,
+    gps_notifier: Notifier<Trigger>,
+    ble_payload: Arc<Mutex<Option<Vec<u8>>>>,
     modem: Modem,
 }
 
@@ -50,9 +57,7 @@ impl<'a> Context<'a> {
         // It is necessary to call this function once. Otherwise some patches to the runtime
         // implemented by esp-idf-sys might not link properly.
         esp_idf_hal::sys::link_patches();
-        ble::initialize_default()?;
-
-        let name = option_env!("APP_NAME").unwrap_or("ESPlayground");
+        ble::initialize(BLE_POWER_LEVEL)?;
 
         let peripherals = Peripherals::take()?;
         let Peripherals {
@@ -93,24 +98,63 @@ impl<'a> Context<'a> {
         )?;
 
         // Shared state between button and BLE scanner to control scanning based on system state.
-        let button_state = Arc::new(Mutex::new(INIT_STATE));
+        let button_state = Arc::new(Mutex::new(State::on()));
+        let ble_payload = Arc::new(Mutex::new(None::<Vec<u8>>));
 
         // Spawn button polling thread
-        let mut button =
-            Button::new(button_notifier, pin_driver, Arc::clone(&button_state))?;
+        let mut button = Button::new(
+            button_notifier,
+            &Trigger::ButtonPressed,
+            pin_driver,
+            Arc::clone(&button_state),
+        )?;
         spawn(move || button.poll());
 
         // Spawn BLE scanner thread
         let ble_timer = Timer::new(ble_timer_driver)?;
-        let mut scanner =
-            Scanner::new(ble_notifier, ble_timer, Arc::clone(&button_state), name)?;
+        let scanner_config = ScannerConfig::new(
+            |name| match name {
+                n if n.ends_with(BLE_ACTIVE_SUFFIX) => {
+                    Some(&Trigger::DeviceFoundActive)
+                }
+                n if n.ends_with(BLE_INACTIVE_SUFFIX) => {
+                    Some(&Trigger::DeviceFoundInactive)
+                }
+                _ => None,
+            },
+            &Trigger::DeviceNotFound,
+            &Trigger::DeviceFoundActive,
+            BLE_SCAN_FREQ_HZ,
+        );
+        let mut scanner = Scanner::new(
+            ble_notifier,
+            ble_timer,
+            Arc::clone(&button_state),
+            Arc::clone(&ble_payload),
+            scanner_config,
+        )?;
         spawn(move || scanner.poll());
 
-        // Setup LED and advertiser
-        let advertiser = Advertiser::new(name, INIT_STATE)?;
+        // Setup BLE advertiser
+        let advertiser = Advertiser::new(State::on(), |state, payload| {
+            let app_name = option_env!("APP_NAME").unwrap_or("ESPlayground");
+            match state {
+                State::On(_) => (
+                    format!("{app_name}{BLE_ACTIVE_SUFFIX}"),
+                    payload.map(|p| p.to_vec()),
+                ),
+                State::Off => (format!("{app_name}{BLE_INACTIVE_SUFFIX}"), None),
+            }
+        })?;
+
+        // Setup LED and its timer
         let led = Led::new(tx_rmt_driver)?;
         let mut led_timer = Timer::new(led_timer_driver)?;
-        led_timer.configure_interrupt(BLINK_FREQ_HZ, led_timer_notifier)?;
+        led_timer.configure_interrupt(
+            BLINK_FREQ_HZ,
+            led_timer_notifier,
+            &Trigger::TimerTicked,
+        )?;
 
         Ok(Context {
             dispatcher,
@@ -120,6 +164,7 @@ impl<'a> Context<'a> {
             button_state,
             uart_driver,
             gps_notifier,
+            ble_payload,
             modem,
         })
     }
@@ -127,13 +172,14 @@ impl<'a> Context<'a> {
     pub fn into_parts(
         self,
     ) -> (
-        Dispatcher,
+        Dispatcher<Trigger>,
         Advertiser,
         Led<'a>,
-        Timer<'a>,
-        Notifier,
+        Timer<'a, Trigger>,
+        Notifier<Trigger>,
         Arc<Mutex<State>>,
         UartRxDriver<'a>,
+        Arc<Mutex<Option<Vec<u8>>>>,
         Modem,
     ) {
         (
@@ -144,6 +190,7 @@ impl<'a> Context<'a> {
             self.gps_notifier,
             self.button_state,
             self.uart_driver,
+            self.ble_payload,
             self.modem,
         )
     }

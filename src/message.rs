@@ -1,46 +1,58 @@
 use anyhow::{anyhow, Result};
 use esp_idf_hal::{delay::BLOCK, task::notification};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::{collections::HashSet, convert::TryFrom, num::NonZeroU32, sync::Arc};
+use std::{
+    collections::HashSet, fmt::Debug, hash::Hash, num::NonZeroU32, sync::Arc,
+};
 
-/// Represents various triggers that can occur in the system.
-///
-/// # Variants
-/// * `ButtonPressed` - Triggered when a button is pressed.
-/// * `TimerTicked` - Triggered when a timer ticks.
-/// * `DeviceFoundActive` - Triggered when an active device is found.
-/// * `DeviceFoundInactive` - Triggered when an inactive device is found.
-/// * `DeviceNotFound` - Triggered when no device is found.
-#[derive(Debug, Eq, Hash, IntoPrimitive, PartialEq, TryFromPrimitive)]
-#[repr(u32)]
-pub enum Trigger {
-    ButtonPressed = 1 << 0,
-    TimerTicked = 1 << 1,
-    DeviceFoundActive = 1 << 2,
-    DeviceFoundInactive = 1 << 3,
-    DeviceNotFound = 1 << 4,
-    GpsDataAvailable = 1 << 5,
+pub trait Trigger: Debug + Eq + Hash + Sized + Send + Sync + 'static {
+    const ALL: &[Self];
+
+    fn as_u32(&self) -> u32;
 }
 
-impl TryFrom<Trigger> for NonZeroU32 {
-    /// Converts a `Trigger` into a `NonZeroU32`.
-    ///
-    /// # Errors
-    /// Returns an error if the trigger value is invalid for `NonZeroU32`.
-    type Error = anyhow::Error;
+#[macro_export]
+macro_rules! trigger_enum {
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident {
+            $($variant:ident = $value:expr),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[repr(u32)]
+        $vis enum $name {
+            $($variant = $value),*
+        }
 
-    fn try_from(trigger: Trigger) -> Result<Self, Self::Error> {
-        NonZeroU32::new(trigger.into())
-            .ok_or_else(|| anyhow!("Invalid value for NonZeroU32"))
-    }
+        impl $crate::message::Trigger for $name {
+            const ALL: &[Self] = &[
+                $(Self::$variant),*
+            ];
+
+            fn as_u32(&self) -> u32 {
+                match self {
+                    $(Self::$variant => $value),*
+                }
+            }
+        }
+    };
+}
+
+fn trigger_to_nonzero<T: Trigger>(trigger: &T) -> Result<NonZeroU32> {
+    NonZeroU32::new(trigger.as_u32())
+        .ok_or_else(|| anyhow!("Invalid value for NonZeroU32"))
 }
 
 /// Represents a notifier for sending notifications.
-pub struct Notifier {
+///
+/// # Type Parameters
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Notifier<T: Trigger> {
     notifier: Arc<notification::Notifier>,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl Notifier {
+impl<T: Trigger> Notifier<T> {
     /// Creates a new `Notifier` instance.
     ///
     /// # Arguments
@@ -49,7 +61,10 @@ impl Notifier {
     /// # Errors
     /// Returns an error if the notifier cannot be initialized.
     pub fn new(notifier: Arc<notification::Notifier>) -> Result<Self> {
-        Ok(Self { notifier })
+        Ok(Self {
+            notifier,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Sends a notification for a given trigger.
@@ -59,9 +74,9 @@ impl Notifier {
     ///
     /// # Errors
     /// Returns an error if the notification fails.
-    pub fn notify(&self, trigger: Trigger) -> Result<()> {
+    pub fn notify(&self, trigger: &T) -> Result<()> {
         unsafe {
-            self.notifier.notify_and_yield(trigger.try_into()?);
+            self.notifier.notify_and_yield(trigger_to_nonzero(trigger)?);
         }
 
         Ok(())
@@ -69,11 +84,15 @@ impl Notifier {
 }
 
 /// Represents a dispatcher for collecting triggers.
-pub struct Dispatcher {
+///
+/// # Type Parameters
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Dispatcher<T: Trigger> {
     notification: notification::Notification,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl Dispatcher {
+impl<T: Trigger> Dispatcher<T> {
     /// Creates a new `Dispatcher` instance.
     ///
     /// # Errors
@@ -81,6 +100,7 @@ impl Dispatcher {
     pub fn new() -> Result<Self> {
         Ok(Self {
             notification: notification::Notification::new(),
+            _marker: std::marker::PhantomData,
         })
     }
 
@@ -88,7 +108,7 @@ impl Dispatcher {
     ///
     /// # Errors
     /// Returns an error if the notifier cannot be created.
-    pub fn notifier(&self) -> Result<Notifier> {
+    pub fn notifier(&self) -> Result<Notifier<T>> {
         Notifier::new(self.notification.notifier())
     }
 
@@ -99,29 +119,16 @@ impl Dispatcher {
     ///
     /// # Errors
     /// Returns an error if the collection fails.
-    pub fn collect(&self) -> Result<HashSet<Trigger>> {
+    pub fn collect(&self) -> Result<HashSet<&'static T>> {
         let mut set = HashSet::new();
 
         let notification = self.notification.wait(BLOCK);
         if let Some(notification) = notification {
-            let notification = notification.get();
-            if notification & u32::from(Trigger::ButtonPressed) != 0 {
-                set.insert(Trigger::ButtonPressed);
-            }
-            if notification & u32::from(Trigger::TimerTicked) != 0 {
-                set.insert(Trigger::TimerTicked);
-            }
-            if notification & u32::from(Trigger::DeviceFoundActive) != 0 {
-                set.insert(Trigger::DeviceFoundActive);
-            }
-            if notification & u32::from(Trigger::DeviceFoundInactive) != 0 {
-                set.insert(Trigger::DeviceFoundInactive);
-            }
-            if notification & u32::from(Trigger::DeviceNotFound) != 0 {
-                set.insert(Trigger::DeviceNotFound);
-            }
-            if notification & u32::from(Trigger::GpsDataAvailable) != 0 {
-                set.insert(Trigger::GpsDataAvailable);
+            let bits = notification.get();
+            for trigger in T::ALL {
+                if bits & trigger.as_u32() != 0 {
+                    set.insert(trigger);
+                }
             }
         }
 
