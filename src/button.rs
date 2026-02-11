@@ -41,6 +41,9 @@ where
     /// * `pin` - A GPIO pin driver.
     /// * `state` - Shared state of the button.
     ///
+    /// # Returns
+    /// A new `Button` instance.
+    ///
     /// # Errors
     /// Returns an error if the button cannot be initialized.
     pub fn new(
@@ -101,6 +104,9 @@ where
     TR: Trigger,
 {
     /// Toggles the state of the button.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the mutex lock cannot be acquired.

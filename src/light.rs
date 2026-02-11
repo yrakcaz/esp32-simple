@@ -82,6 +82,9 @@ impl<'a> Led<'a> {
     /// # Arguments
     /// * `tx_rmt` - A `TxRmtDriver` for controlling the LED.
     ///
+    /// # Returns
+    /// A new `Led` initialized to off with black color.
+    ///
     /// # Errors
     /// Returns an error if the LED cannot be initialized.
     pub fn new(tx_rmt: TxRmtDriver<'a>) -> Result<Self> {
@@ -111,6 +114,9 @@ impl<'a> Led<'a> {
     /// # Arguments
     /// * `color` - The new color for the LED.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the color cannot be applied.
     pub fn set_color(&mut self, color: Rgb) -> Result<()> {
@@ -121,6 +127,9 @@ impl<'a> Led<'a> {
 
     /// Turns on the LED.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the LED cannot be turned on.
     pub fn on(&mut self) -> Result<()> {
@@ -130,6 +139,9 @@ impl<'a> Led<'a> {
     }
 
     /// Turns off the LED.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the LED cannot be turned off.
@@ -142,6 +154,9 @@ impl<'a> Led<'a> {
 
 impl Switch for Led<'_> {
     /// Toggles the state of the LED.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the LED state cannot be toggled.

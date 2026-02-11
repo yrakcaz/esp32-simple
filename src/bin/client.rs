@@ -15,15 +15,15 @@ use common::{
     logic::{trace_func, Core, DeviceNearby, State, Trigger},
 };
 
-/// State machine for the client device (GPS tracking, BLE advertising).
+// State machine for the client device (GPS tracking, BLE advertising).
 struct StateMachine<'a> {
     core: Core<'a>,
     location: Arc<Mutex<Option<Reading>>>,
-    max_speed_mps: f64,
+    max_speed_mps: f32,
 }
 
 impl<'a> StateMachine<'a> {
-    /// Creates a new client state machine.
+    // Creates a new client state machine.
     fn new(core: Core<'a>, location: Arc<Mutex<Option<Reading>>>) -> Self {
         Self {
             core,
@@ -32,10 +32,10 @@ impl<'a> StateMachine<'a> {
         }
     }
 
-    /// Custom button handler that also resets the max speed.
+    // Custom button handler that also resets the max speed.
     fn handle_button_pressed(
         core: &mut Core<'_>,
-        max_speed_mps: &mut f64,
+        max_speed_mps: &mut f32,
     ) -> Result<()> {
         trace_func!();
 
@@ -49,7 +49,7 @@ impl<'a> StateMachine<'a> {
         core.advertiser.toggle()
     }
 
-    /// Runs the state machine.
+    // Runs the state machine.
     fn run(&mut self) -> Result<()> {
         let max_speed_mps = &mut self.max_speed_mps;
         let location = &self.location;
@@ -78,12 +78,12 @@ impl<'a> StateMachine<'a> {
                 if let Some(reading) = data.take() {
                     info!("GPS Reading: {}", reading);
                     if let Some(speed) = reading.speed_mps() {
-                        if f64::from(speed) > *max_speed_mps {
-                            *max_speed_mps = f64::from(speed);
+                        if speed > *max_speed_mps {
+                            *max_speed_mps = speed;
                         }
                     }
                     let payload = (*max_speed_mps > 0.0).then(|| {
-                        let bytes = (*max_speed_mps as f32).to_le_bytes().to_vec();
+                        let bytes = max_speed_mps.to_le_bytes().to_vec();
                         let kmph = *max_speed_mps * 3.6;
                         info!(
                             "Advertising {} bytes: {:?} (max_speed: {kmph:.2} km/h)",

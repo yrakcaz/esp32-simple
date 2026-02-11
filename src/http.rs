@@ -7,7 +7,7 @@ use crate::wifi::Connection;
 /// Represents an HTTP client that interacts with a server over Wi-Fi.
 ///
 /// This struct provides methods to send HTTP requests, such as POST requests, using the ESP-IDF framework.
-/// It requires a reference to an active Wi-Fi connection to function.
+/// It owns an active Wi-Fi connection for the duration of its lifetime.
 pub struct Client<'a> {
     client: HttpClient<EspHttpConnection>,
     wifi: Connection<'a>,
@@ -19,6 +19,10 @@ impl<'a> Client<'a> {
     /// # Arguments
     ///
     /// * `wifi` - An active Wi-Fi connection.
+    ///
+    /// # Returns
+    ///
+    /// A new `Client` ready to send HTTP requests.
     ///
     /// # Errors
     ///

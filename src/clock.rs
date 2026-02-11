@@ -22,6 +22,9 @@ impl<'a, T: Trigger> Timer<'a, T> {
     /// # Arguments
     /// * `timer` - A timer driver instance.
     ///
+    /// # Returns
+    /// A new `Timer` instance.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be initialized.
     pub fn new(timer: TimerDriver<'a>) -> Result<Self> {
@@ -34,9 +37,12 @@ impl<'a, T: Trigger> Timer<'a, T> {
     /// Configures the timer interrupt.
     ///
     /// # Arguments
-    /// * `freq` - Frequency of the timer interrupt.
+    /// * `freq` - Frequency of the timer interrupt in Hz.
     /// * `notifier` - A notifier to send timer tick events.
     /// * `trigger` - The trigger to emit when the timer ticks.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the interrupt cannot be configured.
@@ -74,6 +80,9 @@ impl<'a, T: Trigger> Timer<'a, T> {
 
     /// Turns on the timer.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be turned on.
     pub fn on(&mut self) -> Result<()> {
@@ -82,16 +91,24 @@ impl<'a, T: Trigger> Timer<'a, T> {
 
     /// Turns off the timer.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be turned off.
     pub fn off(&mut self) -> Result<()> {
         self.enable(false)
     }
 
-    /// Delays execution for a specified frequency.
+    /// Delays execution for a period determined by the given frequency.
+    ///
+    /// The delay duration is `1 / freq` seconds (i.e., one period of the frequency).
     ///
     /// # Arguments
-    /// * `freq` - Frequency for the delay.
+    /// * `freq` - Frequency in Hz; the delay lasts one period of this frequency.
+    ///
+    /// # Returns
+    /// `Ok(())` when the delay completes.
     ///
     /// # Errors
     /// Returns an error if the delay cannot be performed.

@@ -11,8 +11,6 @@ use esp_layground::{
     trigger_enum,
 };
 
-// FIXME don't forget to add missing doc everywhere... and update README. And update instructions.md so it's automatic in the future..
-
 macro_rules! func {
     () => {{
         fn f() {}
@@ -48,17 +46,17 @@ trigger_enum! {
     }
 }
 
-/// Represents whether a nearby device is active or inactive.
+// Represents whether a nearby device is active or inactive.
 #[derive(PartialEq)]
 pub enum DeviceNearby {
     Active,
     Inactive,
 }
 
-/// Application state: either Off or On with optional device nearby info.
+// Application state: either Off or On with optional device nearby info.
 pub type State = infra::State<DeviceNearby>;
 
-/// Extension trait for app-specific State behavior.
+// Extension trait for app-specific State behavior.
 pub trait StateExt {
     fn to_str(&self) -> &'static str;
     fn to_color(&self) -> Rgb;
@@ -76,7 +74,7 @@ impl StateExt for State {
 
     fn to_color(&self) -> Rgb {
         match self {
-            State::On(None) | State::On(Some(DeviceNearby::Active)) => GREEN,
+            State::On(None | Some(DeviceNearby::Active)) => GREEN,
             State::Off | State::On(Some(DeviceNearby::Inactive)) => RED,
         }
     }
@@ -91,10 +89,7 @@ pub struct Core<'a> {
 }
 
 impl<'a> Core<'a> {
-    /// Creates a new core with initialized LED.
-    ///
-    /// # Errors
-    /// Returns an error if LED initialization fails.
+    // Creates a new core with initialized LED.
     pub fn new(
         state: State,
         dispatcher: Dispatcher<Trigger>,
@@ -114,10 +109,7 @@ impl<'a> Core<'a> {
         })
     }
 
-    /// Handles the timer ticked trigger (LED blinking when device nearby).
-    ///
-    /// # Errors
-    /// Returns an error if the LED state cannot be toggled.
+    // Handles the timer ticked trigger (LED blinking when device nearby).
     pub fn handle_timer_ticked(&mut self) -> Result<()> {
         trace_func!();
 
@@ -127,7 +119,7 @@ impl<'a> Core<'a> {
         }
     }
 
-    /// Handles the device found inactive trigger.
+    // Handles the device found inactive trigger.
     pub fn handle_device_found_inactive(&mut self) {
         trace_func!();
 
@@ -136,7 +128,7 @@ impl<'a> Core<'a> {
         }
     }
 
-    /// Handles the device not found trigger.
+    // Handles the device not found trigger.
     pub fn handle_device_not_found(&mut self) {
         trace_func!();
 
@@ -145,13 +137,7 @@ impl<'a> Core<'a> {
         }
     }
 
-    /// Handles common triggers, returning true if handled.
-    ///
-    /// Handles: ButtonPressed, DeviceFoundActive, DeviceFoundInactive,
-    /// DeviceNotFound, TimerTicked.
-    ///
-    /// # Errors
-    /// Returns an error if trigger handling fails.
+    // Handles common triggers, returning true if handled.
     pub fn handle_common_triggers(
         &mut self,
         triggers: &HashSet<&'static Trigger>,
@@ -183,10 +169,7 @@ impl<'a> Core<'a> {
         Ok(handled)
     }
 
-    /// Updates LED state based on current state.
-    ///
-    /// # Errors
-    /// Returns an error if LED or timer operations fail.
+    // Updates LED state based on current state.
     pub fn update_led(&mut self) -> Result<()> {
         self.led.set_color(self.state.to_color())?;
         if matches!(self.state, State::On(None) | State::Off) {
@@ -198,10 +181,7 @@ impl<'a> Core<'a> {
         Ok(())
     }
 
-    /// Runs the main loop, delegating trigger handling to the provided closure.
-    ///
-    /// # Errors
-    /// Returns an error if any operation fails.
+    // Runs the main loop, delegating trigger handling to the provided closure.
     pub fn run<F>(&mut self, mut handle_triggers: F) -> Result<()>
     where
         F: FnMut(&mut Self, &HashSet<&'static Trigger>) -> Result<()>,

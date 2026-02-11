@@ -27,22 +27,34 @@ pub enum State<T = ()> {
 
 impl<T> State<T> {
     /// Creates a new `State` in the `On` position with no additional data.
+    ///
+    /// # Returns
+    /// A `State` in the `On` position with `None` data.
     pub const fn on() -> Self {
         State::On(None)
     }
 
     /// Creates a new `State` in the `Off` position.
+    ///
+    /// # Returns
+    /// A `State` in the `Off` position.
     #[must_use]
     pub const fn off() -> Self {
         State::Off
     }
 
     /// Returns `true` if the state is `Off`.
+    ///
+    /// # Returns
+    /// `true` if `Off`, `false` otherwise.
     pub fn is_off(&self) -> bool {
         matches!(self, State::Off)
     }
 
     /// Returns `true` if the state is `On`.
+    ///
+    /// # Returns
+    /// `true` if `On`, `false` otherwise.
     pub fn is_on(&self) -> bool {
         matches!(self, State::On(_))
     }
@@ -62,6 +74,9 @@ impl<T> State<T> {
 /// This trait's `toggle` method returns an error if the toggle operation fails.
 pub trait Switch {
     /// Toggles the state of the switch.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the toggle operation fails.

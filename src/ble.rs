@@ -17,6 +17,9 @@ use crate::{
 /// # Arguments
 /// * `power_level` - The power level to use for both advertising and scanning.
 ///
+/// # Returns
+/// `Ok(())` on success.
+///
 /// # Errors
 /// Returns an error if the BLE device cannot be configured with the specified power levels.
 pub fn initialize(power_level: PowerLevel) -> Result<()> {
@@ -44,8 +47,11 @@ impl Advertiser {
     /// * `state` - Initial state of the advertiser.
     /// * `derive` - Function to derive advertisement name and payload from state.
     ///
+    /// # Returns
+    /// A new `Advertiser` with the advertisement already applied.
+    ///
     /// # Errors
-    /// Returns an error if the advertiser cannot be initialized.
+    /// Returns an error if the advertisement cannot be applied.
     pub fn new(state: State, derive: DeriveFn) -> Result<Self> {
         let ret = Self {
             state,
@@ -78,6 +84,16 @@ impl Advertiser {
         Ok(())
     }
 
+    /// Updates the BLE advertisement payload and re-applies the advertisement.
+    ///
+    /// # Arguments
+    /// * `payload` - Optional new manufacturer data bytes, or `None` to clear.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
+    /// # Errors
+    /// Returns an error if the advertisement cannot be re-applied.
     pub fn set_payload(&mut self, payload: Option<Vec<u8>>) -> Result<()> {
         self.payload = payload;
         self.apply()
@@ -87,8 +103,11 @@ impl Advertiser {
 impl Switch for Advertiser {
     /// Toggles the state of the advertiser.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
-    /// Returns an error if the state cannot be toggled or applied.
+    /// Returns an error if the advertisement cannot be re-applied.
     fn toggle(&mut self) -> Result<()> {
         self.state.toggle();
 
@@ -115,6 +134,9 @@ impl<T: Trigger> ScannerConfig<T> {
     /// * `default_trigger` - Trigger to emit when no matching device is found.
     /// * `payload_trigger` - Store payload when this trigger matches.
     /// * `scan_freq_hz` - Scan frequency in Hz.
+    ///
+    /// # Returns
+    /// A new `ScannerConfig` instance.
     #[must_use]
     pub fn new(
         triggers: fn(&str) -> Option<&'static T>,
@@ -147,6 +169,7 @@ pub struct Scanner<'a, T: Trigger> {
 }
 
 impl<'a, T: Trigger> Scanner<'a, T> {
+    /// BLE scan window duration in milliseconds.
     const WINDOW: i32 = 1000;
 
     /// Creates a new `Scanner` instance.
@@ -157,6 +180,9 @@ impl<'a, T: Trigger> Scanner<'a, T> {
     /// * `state` - Shared state of the scanner.
     /// * `payload` - Shared storage for BLE payload data.
     /// * `config` - Scan configuration (triggers, frequency, etc.).
+    ///
+    /// # Returns
+    /// A new `Scanner` ready to poll.
     ///
     /// # Errors
     /// Returns an error if the scanner cannot be initialized.

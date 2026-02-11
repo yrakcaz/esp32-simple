@@ -29,7 +29,7 @@ const BLE_POWER_LEVEL: PowerLevel = PowerLevel::N0;
 const BLE_SCAN_FREQ_HZ: u64 = 1;
 const BLINK_FREQ_HZ: u64 = 3;
 
-/// Common hardware context shared by both server and client binaries.
+// Common hardware context shared by both server and client binaries.
 pub struct Context<'a> {
     dispatcher: Dispatcher<Trigger>,
     advertiser: Advertiser,
@@ -43,16 +43,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    /// Initializes all hardware peripherals and background threads.
-    ///
-    /// This method initializes:
-    /// - System patches and logging
-    /// - BLE functionality
-    /// - All peripherals (button, BLE scanner, GPS, LED, timers)
-    /// - Background threads for button polling, BLE scanning, and GPS reading
-    ///
-    /// # Errors
-    /// Returns an error if any initialization or setup fails.
+    // Initializes all hardware peripherals and background threads.
     pub fn try_default() -> Result<Context<'a>> {
         // It is necessary to call this function once. Otherwise some patches to the runtime
         // implemented by esp-idf-sys might not link properly.
@@ -141,7 +132,7 @@ impl<'a> Context<'a> {
             match state {
                 State::On(_) => (
                     format!("{app_name}{BLE_ACTIVE_SUFFIX}"),
-                    payload.map(|p| p.to_vec()),
+                    payload.map(<[u8]>::to_vec),
                 ),
                 State::Off => (format!("{app_name}{BLE_INACTIVE_SUFFIX}"), None),
             }
@@ -169,6 +160,7 @@ impl<'a> Context<'a> {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
     ) -> (

@@ -2,6 +2,12 @@ use anyhow::{anyhow, Result};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::wifi::{BlockingWifi, EspWifi};
 
+/// Wi-Fi network configuration containing SSID, password, and authentication method.
+///
+/// # Fields
+/// * `ssid` - The network SSID.
+/// * `password` - The network password.
+/// * `auth` - The authentication method (e.g., `WPA2Personal`).
 pub struct Config {
     ssid: &'static str,
     password: &'static str,
@@ -17,21 +23,43 @@ impl Config {
         }
     }
 
+    /// Returns the configured Wi-Fi SSID.
+    ///
+    /// # Returns
+    /// The SSID as a string slice.
     #[must_use]
     pub fn ssid(&self) -> &str {
         self.ssid
     }
 
+    /// Returns the configured Wi-Fi password.
+    ///
+    /// # Returns
+    /// The password as a string slice.
     #[must_use]
     pub fn password(&self) -> &str {
         self.password
     }
 
+    /// Returns the configured authentication method.
+    ///
+    /// # Returns
+    /// The [`AuthMethod`] variant for this configuration.
     #[must_use]
     pub fn auth(&self) -> AuthMethod {
         self.auth
     }
 
+    /// Creates a `Config` from compile-time environment variables.
+    ///
+    /// Reads `WIFI_SSID` and `WIFI_PASSWORD` via `option_env!` and defaults
+    /// to `WPA2Personal` authentication.
+    ///
+    /// # Returns
+    /// A `Config` populated from environment variables.
+    ///
+    /// # Errors
+    /// Returns an error if `WIFI_SSID` or `WIFI_PASSWORD` is not set at compile time.
     pub fn from_env() -> Result<Self> {
         let ssid = option_env!("WIFI_SSID")
             .ok_or_else(|| anyhow!("WIFI_SSID environment variable not set"))?;
@@ -52,14 +80,21 @@ pub struct Connection<'a> {
 impl<'a> Connection<'a> {
     /// Creates a new `Connection` instance with the given Wi-Fi handler and configuration.
     ///
+    /// Configures, starts, connects, and waits for the network interface to come up.
+    ///
     /// # Arguments
     ///
     /// * `handler` - The Wi-Fi handler to manage the connection.
     /// * `config` - The Wi-Fi configuration containing SSID, password, and authentication method.
     ///
+    /// # Returns
+    ///
+    /// A connected `Connection` instance ready for use.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the configuration cannot be set or if the SSID/password conversion fails.
+    /// Returns an error if the configuration cannot be set, SSID/password conversion fails,
+    /// or the connection cannot be established.
     pub fn new(handler: BlockingWifi<EspWifi<'a>>, config: &Config) -> Result<Self> {
         let configuration: Configuration =
             Configuration::Client(ClientConfiguration {

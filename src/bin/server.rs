@@ -21,7 +21,7 @@ use common::{
     logic::{trace_func, Core, DeviceNearby, State},
 };
 
-/// State machine for the server device (BLE scanning, HTTP posting).
+// State machine for the server device (BLE scanning, HTTP posting).
 struct StateMachine<'a> {
     core: Core<'a>,
     http: Client<'a>,
@@ -31,7 +31,7 @@ struct StateMachine<'a> {
 }
 
 impl<'a> StateMachine<'a> {
-    /// Creates a new server state machine.
+    // Creates a new server state machine.
     fn new(
         core: Core<'a>,
         http: Client<'a>,
@@ -51,9 +51,8 @@ impl<'a> StateMachine<'a> {
         })
     }
 
-    /// Sends the max speed from BLE payload over HTTP.
-    ///
-    /// Does nothing if no payload is available (not an error).
+    // Sends the max speed from BLE payload over HTTP.
+    // Does nothing if no payload is available (not an error).
     fn post_speed(
         http: &mut Client<'_>,
         url: &str,
@@ -91,7 +90,7 @@ impl<'a> StateMachine<'a> {
         }
     }
 
-    /// Custom device found active handler that posts speed data.
+    // Custom device found active handler that posts speed data.
     fn handle_device_found_active(
         core: &mut Core<'_>,
         http: &mut Client<'_>,
@@ -112,7 +111,7 @@ impl<'a> StateMachine<'a> {
         Ok(())
     }
 
-    /// Runs the state machine.
+    // Runs the state machine.
     fn run(&mut self) -> Result<()> {
         let http = &mut self.http;
         let url = self.url;

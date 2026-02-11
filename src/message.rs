@@ -4,12 +4,38 @@ use std::{
     collections::HashSet, fmt::Debug, hash::Hash, num::NonZeroU32, sync::Arc,
 };
 
+/// A trait for notification trigger types used in the inter-thread messaging system.
+///
+/// Implementors must be thread-safe (`Send + Sync + 'static`) and support
+/// equality comparison and hashing for use in `HashSet` collections.
+/// Each variant maps to a unique `u32` bitmask for `FreeRTOS` task notifications.
+///
+/// Use the `trigger_enum!` macro to derive this trait automatically.
 pub trait Trigger: Debug + Eq + Hash + Sized + Send + Sync + 'static {
+    /// A slice containing all possible trigger variants.
     const ALL: &[Self];
 
+    /// Returns the `u32` bitmask value for this trigger.
+    ///
+    /// # Returns
+    /// A non-zero `u32` suitable for use as a `FreeRTOS` task notification bit.
     fn as_u32(&self) -> u32;
 }
 
+/// Defines a trigger enum with an automatic [`Trigger`] trait implementation.
+///
+/// Generates a `#[repr(u32)]` enum and implements [`Trigger::ALL`] and [`Trigger::as_u32`].
+/// Each variant must be assigned a power-of-two value for use as a notification bitmask.
+///
+/// ```text
+/// trigger_enum! {
+///     #[derive(Debug, Eq, Hash, PartialEq)]
+///     pub enum MyTrigger {
+///         Foo = 1 << 0,
+///         Bar = 1 << 1,
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! trigger_enum {
     (
@@ -58,6 +84,9 @@ impl<T: Trigger> Notifier<T> {
     /// # Arguments
     /// * `notifier` - An `Arc` of a `notification::Notifier`.
     ///
+    /// # Returns
+    /// A new `Notifier` instance.
+    ///
     /// # Errors
     /// Returns an error if the notifier cannot be initialized.
     pub fn new(notifier: Arc<notification::Notifier>) -> Result<Self> {
@@ -72,8 +101,11 @@ impl<T: Trigger> Notifier<T> {
     /// # Arguments
     /// * `trigger` - The trigger to notify.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
-    /// Returns an error if the notification fails.
+    /// Returns an error if the trigger value is zero or the notification fails.
     pub fn notify(&self, trigger: &T) -> Result<()> {
         unsafe {
             self.notifier.notify_and_yield(trigger_to_nonzero(trigger)?);
@@ -95,6 +127,9 @@ pub struct Dispatcher<T: Trigger> {
 impl<T: Trigger> Dispatcher<T> {
     /// Creates a new `Dispatcher` instance.
     ///
+    /// # Returns
+    /// A new `Dispatcher` ready to create notifiers and collect triggers.
+    ///
     /// # Errors
     /// Returns an error if the dispatcher cannot be initialized.
     pub fn new() -> Result<Self> {
@@ -105,6 +140,9 @@ impl<T: Trigger> Dispatcher<T> {
     }
 
     /// Returns a `Notifier` associated with the dispatcher.
+    ///
+    /// # Returns
+    /// A `Notifier` linked to this dispatcher's notification system.
     ///
     /// # Errors
     /// Returns an error if the notifier cannot be created.
