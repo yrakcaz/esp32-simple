@@ -1,29 +1,20 @@
 [package]
 authors = ["yrakcaz <zackaryayoun@gmail.com>"]
-categories = ["embedded", "rust", "esp32"]
-description = "Playing around with the ESP32 SoC"
+categories = ["embedded", "no-std", "hardware-support"]
+description = "Simple ESP32 embedded library with reusable modules for BLE, Wi-Fi, HTTP, GPS, LED control, and more"
 edition = "2021"
-keywords = ["ESP32", "SoC", "playground"]
+keywords = ["esp32", "embedded", "iot", "beginner", "simple"]
 license = "MIT"
-name = "esp-layground"
+name = "esp32-simple"
 readme = "README.md"
-repository = "https://github.com/yrakcaz/esp-layground.git"
+homepage = "https://github.com/yrakcaz/esp32-simple"
+repository = "https://github.com/yrakcaz/esp32-simple.git"
+documentation = "https://docs.rs/esp32-simple"
 resolver = "2"
 rust-version = "1.82.0"
-version = "1.2.0"
-default-run = "client"
+version = "0.1.0"
 
 [lib]
-harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
-
-[[bin]]
-name = "client"
-path = "src/bin/client.rs"
-harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
-
-[[bin]]
-name = "server"
-path = "src/bin/server.rs"
 harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]

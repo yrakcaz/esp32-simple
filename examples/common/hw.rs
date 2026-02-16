@@ -11,7 +11,7 @@ use esp_idf_hal::{
 };
 use std::sync::{Arc, Mutex};
 
-use esp_layground::{
+use esp32_simple::{
     ble::{self, Advertiser, Scanner, ScannerConfig},
     button::Button,
     clock::Timer,
