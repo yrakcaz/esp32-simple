@@ -23,16 +23,16 @@ jobs:
             args: --all -- --check --color always
           - name: client
             command: build
-            args: --release --bin client
+            args: --release --example client
           - name: client
             command: clippy
-            args: --lib --bin client -- -D warnings
+            args: --lib --example client -- -D warnings
           - name: server
             command: build
-            args: --release --bin server
+            args: --release --example server
           - name: server
             command: clippy
-            args: --lib --bin server -- -D warnings
+            args: --lib --example server -- -D warnings
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -3,7 +3,7 @@ use esp_idf_svc::log::EspLogger;
 use log::info;
 use std::sync::{Arc, Mutex};
 
-use esp_layground::{
+use esp32_simple::{
     gps::{Reading, Sensor},
     infra::{Poller, Switch},
     thread,

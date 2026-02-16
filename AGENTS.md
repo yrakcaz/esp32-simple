@@ -40,9 +40,9 @@ Update this file when project practices change or guidelines become outdated.
 - Ensure module descriptions in README match the `///` doc comments in lib.rs
 - Module count and names must be identical between both files
 
-#### Binary Documentation
-- README examples (`cargo run --bin client/server`) must reference actual binary names from Cargo.toml `[[bin]]` sections
-- Environment variable documentation must match what's checked in binary code via `option_env!()`
+#### Example Documentation
+- README examples (`cargo run --example client/server`) must reference actual example names from the examples/ directory
+- Environment variable documentation must match what's checked in example code via `option_env!()`
 
 ### Library Documentation
 - Module doc comments in `src/lib.rs` must be single-line descriptions synchronized with README.md
