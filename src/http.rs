@@ -1,18 +1,13 @@
-#[cfg(feature = "wifi")]
 use anyhow::{ensure, Result};
 use embedded_svc::{http::client::Client as HttpClient, io::Write};
 use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
 
 use crate::wifi::Connection;
 
-/// The base URL for HTTP requests.
-/// This value is retrieved from the environment variable `HTTP_URL`.
-pub const HTTP_URL: &str = env!("HTTP_URL");
-
 /// Represents an HTTP client that interacts with a server over Wi-Fi.
 ///
 /// This struct provides methods to send HTTP requests, such as POST requests, using the ESP-IDF framework.
-/// It requires a reference to an active Wi-Fi connection to function.
+/// It owns an active Wi-Fi connection for the duration of its lifetime.
 pub struct Client<'a> {
     client: HttpClient<EspHttpConnection>,
     wifi: Connection<'a>,
@@ -24,6 +19,10 @@ impl<'a> Client<'a> {
     /// # Arguments
     ///
     /// * `wifi` - An active Wi-Fi connection.
+    ///
+    /// # Returns
+    ///
+    /// A new `Client` ready to send HTTP requests.
     ///
     /// # Errors
     ///
@@ -48,7 +47,7 @@ impl<'a> Client<'a> {
     /// # Errors
     ///
     /// Returns an error if the Wi-Fi is not connected, the request fails, or the response status is not in the success range.
-    pub fn post(&mut self, url: &'a str, payload: Option<&'a [u8]>) -> Result<u16> {
+    pub fn post(&mut self, url: &str, payload: Option<&[u8]>) -> Result<u16> {
         ensure!(self.wifi.is_on()?, "WIFI is off");
 
         let payload = payload.unwrap_or(b"");

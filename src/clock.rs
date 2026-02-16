@@ -10,40 +10,51 @@ use crate::{
 ///
 /// # Type Parameters
 /// * `'a` - Lifetime of the timer.
-pub struct Timer<'a> {
+/// * `T` - The trigger type implementing the `Trigger` trait.
+pub struct Timer<'a, T: Trigger> {
     timer: TimerDriver<'a>,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl<'a> Timer<'a> {
+impl<'a, T: Trigger> Timer<'a, T> {
     /// Creates a new `Timer` instance.
     ///
     /// # Arguments
     /// * `timer` - A timer driver instance.
     ///
+    /// # Returns
+    /// A new `Timer` instance.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be initialized.
     pub fn new(timer: TimerDriver<'a>) -> Result<Self> {
-        Ok(Self { timer })
+        Ok(Self {
+            timer,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Configures the timer interrupt.
     ///
     /// # Arguments
-    /// * `freq` - Frequency of the timer interrupt.
+    /// * `freq` - Frequency of the timer interrupt in Hz.
     /// * `notifier` - A notifier to send timer tick events.
+    /// * `trigger` - The trigger to emit when the timer ticks.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the interrupt cannot be configured.
     pub fn configure_interrupt(
         &mut self,
         freq: u64,
-        notifier: Notifier,
+        notifier: Notifier<T>,
+        trigger: &'static T,
     ) -> Result<()> {
         unsafe {
             self.timer.subscribe(move || {
-                notifier
-                    .notify(Trigger::TimerTicked)
-                    .unwrap_or_else(|_| failure());
+                notifier.notify(trigger).unwrap_or_else(|_| failure());
             })?;
         }
 
@@ -69,6 +80,9 @@ impl<'a> Timer<'a> {
 
     /// Turns on the timer.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be turned on.
     pub fn on(&mut self) -> Result<()> {
@@ -77,16 +91,24 @@ impl<'a> Timer<'a> {
 
     /// Turns off the timer.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the timer cannot be turned off.
     pub fn off(&mut self) -> Result<()> {
         self.enable(false)
     }
 
-    /// Delays execution for a specified frequency.
+    /// Delays execution for a period determined by the given frequency.
+    ///
+    /// The delay duration is `1 / freq` seconds (i.e., one period of the frequency).
     ///
     /// # Arguments
-    /// * `freq` - Frequency for the delay.
+    /// * `freq` - Frequency in Hz; the delay lasts one period of this frequency.
+    ///
+    /// # Returns
+    /// `Ok(())` when the delay completes.
     ///
     /// # Errors
     /// Returns an error if the delay cannot be performed.

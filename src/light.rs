@@ -7,8 +7,6 @@ use crate::{
     infra::{State, Switch},
 };
 
-pub const BLINK_FREQ: u64 = 3;
-
 /// Sends an RGB color value to a `NeoPixel` LED using the RMT peripheral.
 ///
 /// # Arguments
@@ -84,13 +82,16 @@ impl<'a> Led<'a> {
     /// # Arguments
     /// * `tx_rmt` - A `TxRmtDriver` for controlling the LED.
     ///
+    /// # Returns
+    /// A new `Led` initialized to off with black color.
+    ///
     /// # Errors
     /// Returns an error if the LED cannot be initialized.
     pub fn new(tx_rmt: TxRmtDriver<'a>) -> Result<Self> {
         let mut ret = Self {
             tx_rmt,
             color: BLACK,
-            state: State::Off,
+            state: State::off(),
         };
         ret.apply()?;
 
@@ -103,7 +104,7 @@ impl<'a> Led<'a> {
     /// Returns an error if the LED state or color cannot be applied.
     fn apply(&mut self) -> Result<()> {
         match self.state {
-            State::On => neopixel(&self.color, &mut self.tx_rmt),
+            State::On(_) => neopixel(&self.color, &mut self.tx_rmt),
             State::Off => neopixel(&BLACK, &mut self.tx_rmt),
         }
     }
@@ -112,6 +113,9 @@ impl<'a> Led<'a> {
     ///
     /// # Arguments
     /// * `color` - The new color for the LED.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
     ///
     /// # Errors
     /// Returns an error if the color cannot be applied.
@@ -123,20 +127,26 @@ impl<'a> Led<'a> {
 
     /// Turns on the LED.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the LED cannot be turned on.
     pub fn on(&mut self) -> Result<()> {
-        self.state = State::On;
+        self.state = State::on();
 
         self.apply()
     }
 
     /// Turns off the LED.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the LED cannot be turned off.
     pub fn off(&mut self) -> Result<()> {
-        self.state = State::Off;
+        self.state = State::off();
 
         self.apply()
     }
@@ -145,11 +155,14 @@ impl<'a> Led<'a> {
 impl Switch for Led<'_> {
     /// Toggles the state of the LED.
     ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
     /// # Errors
     /// Returns an error if the LED state cannot be toggled.
     fn toggle(&mut self) -> Result<()> {
         match self.state {
-            State::On => self.off(),
+            State::On(_) => self.off(),
             State::Off => self.on(),
         }
     }
