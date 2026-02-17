@@ -1,7 +1,7 @@
 [package]
 authors = ["yrakcaz <zackaryayoun@gmail.com>"]
 categories = ["embedded", "no-std", "hardware-support"]
-description = "Simple ESP32 embedded library with reusable modules for BLE, Wi-Fi, HTTP, GPS, LED control, and more"
+description = "Simple ESP32 embedded library with reusable modules for BLE, Wi-Fi, HTTP, GPS, LED control, and more."
 edition = "2021"
 keywords = ["esp32", "embedded", "iot", "beginner", "simple"]
 license = "MIT"
@@ -9,10 +9,10 @@ name = "esp32-simple"
 readme = "README.md"
 homepage = "https://github.com/yrakcaz/esp32-simple"
 repository = "https://github.com/yrakcaz/esp32-simple.git"
-documentation = "https://docs.rs/esp32-simple"
+documentation = "https://yrakcaz.github.io/esp32-simple/esp32_simple/"
 resolver = "2"
 rust-version = "1.82.0"
-version = "0.1.0"
+version = "0.1.1"
 
 [lib]
 harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
