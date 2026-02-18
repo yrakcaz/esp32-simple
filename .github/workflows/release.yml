@@ -6,7 +6,9 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +29,21 @@ jobs:
           ldproxy: true
           version: 1.82.0.3
 
+      - name: Check if version already published
+        id: check_version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f 2)
+          if curl -s -H 'User-Agent: esp32-simple-ci' https://crates.io/api/v1/crates/esp32-simple | \
+             jq -e ".versions[] | select(.num == \"$VERSION\")" > /dev/null 2>&1; then
+            echo "Version $VERSION already published, skipping"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version $VERSION not found, will publish"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish to crates.io
+        if: steps.check_version.outputs.exists == 'false'
         run: cargo publish --no-verify --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -36,6 +52,9 @@ jobs:
     name: Deploy documentation
     runs-on: ubuntu-latest
     needs: publish
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,9 +73,11 @@ jobs:
       - name: Create index redirect
         run: echo '<meta http-equiv="refresh" content="0;url=esp32_simple/index.html">' > target/xtensa-esp32-espidf/doc/index.html
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/xtensa-esp32-espidf/doc
-          cname: false
+          path: ./target/xtensa-esp32-espidf/doc
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
