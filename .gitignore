@@ -20,4 +20,4 @@ target/
 .keep/
 
 # Core files
-core
+core*
