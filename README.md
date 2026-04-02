@@ -1,7 +1,7 @@
 [![CI](https://github.com/yrakcaz/esp32-simple/actions/workflows/rust_ci.yml/badge.svg)](https://github.com/yrakcaz/esp32-simple/actions/workflows/rust_ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/esp32-simple)](https://crates.io/crates/esp32-simple)
 [![Documentation](https://img.shields.io/badge/docs-esp32--simple-purple)](https://yrakcaz.github.io/esp32-simple/esp32_simple/)
-[![MIT License](https://img.shields.io/github/license/yrakcaz/esp32-simple?color=blue)](./LICENSE-MIT)
+[![MIT License](https://img.shields.io/github/license/yrakcaz/esp32-simple?color=blue)](./LICENSE)
 
 # esp32-simple
 
@@ -215,7 +215,3 @@ Both applications use a state machine pattern coordinating:
 - LED control (visual feedback)
 - Timer-based periodic tasks
 - Inter-thread messaging via FreeRTOS notifications
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE-MIT](./LICENSE-MIT) for details.
