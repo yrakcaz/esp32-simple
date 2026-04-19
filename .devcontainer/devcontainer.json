@@ -1,0 +1,4 @@
+{
+    "name": "esp32-simple",
+    "onCreateCommand": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path && RUSTUP_TOOLCHAIN=stable ~/.cargo/bin/cargo install espup && . ~/.cargo/env && ~/.cargo/bin/espup install --toolchain-version 1.82.0.3"
+}

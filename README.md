@@ -1,4 +1,4 @@
-[![CI](https://github.com/yrakcaz/esp32-simple/actions/workflows/rust_ci.yml/badge.svg)](https://github.com/yrakcaz/esp32-simple/actions/workflows/rust_ci.yml)
+[![CI](https://github.com/yrakcaz/esp32-simple/actions/workflows/ci.yml/badge.svg)](https://github.com/yrakcaz/esp32-simple/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/esp32-simple)](https://crates.io/crates/esp32-simple)
 [![Documentation](https://img.shields.io/badge/docs-esp32--simple-purple)](https://yrakcaz.github.io/esp32-simple/esp32_simple/)
 [![MIT License](https://img.shields.io/github/license/yrakcaz/esp32-simple?color=blue)](./LICENSE)
