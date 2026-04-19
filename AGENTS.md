@@ -34,7 +34,7 @@ Update this file when project practices change or guidelines become outdated.
 ## Maintenance & Synchronization
 
 ### Version Management
-- When updating `rust-version` in Cargo.toml, also update the toolchain version in `.github/workflows/rust_ci.yml`
+- When updating `rust-version` in Cargo.toml, also update the toolchain version in `.github/workflows/ci.yml`
 - The CI version should match the MSRV (Minimum Supported Rust Version)
 - Verify the update by running CI workflow locally or checking CI results
 
