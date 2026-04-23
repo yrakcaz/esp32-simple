@@ -1,6 +1,6 @@
 # AI Coding Instructions
 
-This document defines coding standards and maintenance practices for the ESP-Layground project.
+This document defines coding standards and maintenance practices for the esp-flow project.
 Update this file when project practices change or guidelines become outdated.
 
 ## Code Style

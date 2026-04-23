@@ -11,7 +11,7 @@ use esp_idf_hal::{
 };
 use std::sync::{Arc, Mutex};
 
-use esp32_simple::{
+use esp_flow::{
     ble::{self, Advertiser, Scanner, ScannerConfig},
     button::Button,
     clock::Timer,
@@ -128,7 +128,7 @@ impl<'a> Context<'a> {
 
         // Setup BLE advertiser
         let advertiser = Advertiser::new(State::on(), |state, payload| {
-            let app_name = option_env!("APP_NAME").unwrap_or("ESPlayground");
+            let app_name = option_env!("APP_NAME").unwrap_or("esp-flow");
             match state {
                 State::On(_) => (
                     format!("{app_name}{BLE_ACTIVE_SUFFIX}"),

@@ -1,11 +1,11 @@
-[![CI](https://github.com/yrakcaz/esp32-simple/actions/workflows/ci.yml/badge.svg)](https://github.com/yrakcaz/esp32-simple/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/esp32-simple)](https://crates.io/crates/esp32-simple)
-[![Documentation](https://img.shields.io/badge/docs-esp32--simple-purple)](https://yrakcaz.github.io/esp32-simple/esp32_simple/)
-[![MIT License](https://img.shields.io/github/license/yrakcaz/esp32-simple?color=blue)](./LICENSE)
+[![CI](https://github.com/yrakcaz/esp-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/yrakcaz/esp-flow/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/esp-flow)](https://crates.io/crates/esp-flow)
+[![Documentation](https://img.shields.io/badge/docs-esp--flow-purple)](https://yrakcaz.github.io/esp-flow/esp_flow/)
+[![MIT License](https://img.shields.io/github/license/yrakcaz/esp-flow?color=blue)](./LICENSE)
 
-# esp32-simple
+# esp-flow
 
-An ESP32 embedded development library and GPS tracking system built with Rust and ESP-IDF. This project provides reusable modules for BLE, WiFi, GPS, LED control, and more, along with client/server applications demonstrating a complete GPS tracking solution.
+ESP embedded library with reusable modules for BLE, Wi-Fi, HTTP, GPS, LED control, and more, along with client/server applications demonstrating a complete GPS tracking solution.
 
 ## Project Structure
 
@@ -16,23 +16,23 @@ This project consists of:
 
 ## Using as a Library
 
-Add `esp32-simple` to your ESP32 project:
+Add `esp-flow` to your ESP32 project:
 
 ```bash
-cargo add esp32-simple
+cargo add esp-flow
 ```
 
 Or manually add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-esp32-simple = "0.1"
+esp-flow = "0.2"
 ```
 
 Then import modules:
 
 ```rust
-use esp32_simple::{
+use esp_flow::{
     ble::{Advertiser, Scanner},
     wifi::Connection,
     gps::Sensor,
@@ -120,7 +120,7 @@ The system implements a client/server GPS tracking architecture:
 The following environment variables must be set at compile time:
 
 ### Optional (Both Examples)
-- `APP_NAME` - Application name (default: "ESPlayground")
+- `APP_NAME` - Application name (default: "esp-flow")
 
 ### Required (Server Example Only)
 - `WIFI_SSID` - WiFi network SSID
