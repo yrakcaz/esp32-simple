@@ -33,7 +33,7 @@ jobs:
         id: check_version
         run: |
           VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f 2)
-          if curl -s -H 'User-Agent: esp32-simple-ci' https://crates.io/api/v1/crates/esp32-simple | \
+          if curl -s -H 'User-Agent: esp-flow-ci' https://crates.io/api/v1/crates/esp-flow | \
              jq -e ".versions[] | select(.num == \"$VERSION\")" > /dev/null 2>&1; then
             echo "Version $VERSION already published, skipping"
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -71,7 +71,7 @@ jobs:
         run: cargo doc --no-deps
 
       - name: Create index redirect
-        run: echo '<meta http-equiv="refresh" content="0;url=esp32_simple/index.html">' > target/xtensa-esp32-espidf/doc/index.html
+        run: echo '<meta http-equiv="refresh" content="0;url=esp_flow/index.html">' > target/xtensa-esp32-espidf/doc/index.html
 
       - name: Upload documentation artifact
         uses: actions/upload-pages-artifact@v3

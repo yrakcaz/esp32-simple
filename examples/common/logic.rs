@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::collections::HashSet;
 
-use esp32_simple::{
+use esp_flow::{
     ble::Advertiser,
     clock::Timer,
     color::{Rgb, GREEN, RED},

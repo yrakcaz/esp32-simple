@@ -574,6 +574,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-flow"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "embedded-svc",
+ "embuild",
+ "esp-idf-hal",
+ "esp-idf-svc",
+ "esp32-nimble",
+ "log",
+ "nmea",
+]
+
+[[package]]
 name = "esp-idf-hal"
 version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -655,20 +669,6 @@ dependencies = [
  "num_enum",
  "once_cell",
  "uuid",
-]
-
-[[package]]
-name = "esp32-simple"
-version = "0.1.3"
-dependencies = [
- "anyhow",
- "embedded-svc",
- "embuild",
- "esp-idf-hal",
- "esp-idf-svc",
- "esp32-nimble",
- "log",
- "nmea",
 ]
 
 [[package]]

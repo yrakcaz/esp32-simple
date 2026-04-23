@@ -8,7 +8,7 @@ use esp_idf_svc::{
 use log::info;
 use std::sync::{Arc, Mutex};
 
-use esp32_simple::{
+use esp_flow::{
     http::Client,
     infra::Switch,
     thread,
